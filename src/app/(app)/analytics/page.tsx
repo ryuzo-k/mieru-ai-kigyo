@@ -13,6 +13,7 @@ import {
   BarChart2,
   TrendingUp,
   Activity,
+  ChevronRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -188,6 +189,7 @@ export default function AnalyticsPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [sessions, setSessions] = useState<MeasurementSession[]>([])
   const [measuring, setMeasuring] = useState(false)
+  const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [measureProgress, setMeasureProgress] = useState(0)
   const [measureProgressText, setMeasureProgressText] = useState('')
   const [selectedPlatformTab, setSelectedPlatformTab] = useState<Platform>('claude')
@@ -635,12 +637,17 @@ ${allStats
                                 lastMeasuredAt,
                                 results,
                               }) => (
-                                <TableRow key={prompt.id} className="align-middle">
+                                <TableRow
+                                  key={prompt.id}
+                                  className={cn("align-middle cursor-pointer hover:bg-muted/30 transition-colors", expandedKey === `${platform}-${prompt.id}` && "bg-primary/5")}
+                                  onClick={() => setExpandedKey(expandedKey === `${platform}-${prompt.id}` ? null : `${platform}-${prompt.id}`)}
+                                >
                                   <TableCell className="pl-4 py-3">
                                     <div className="space-y-1">
-                                      <p className="text-sm leading-snug line-clamp-2">
-                                        {prompt.text}
-                                      </p>
+                                      <div className="flex items-center gap-1.5">
+                                        <ChevronRight className={cn("h-3.5 w-3.5 shrink-0 text-muted-foreground/50 transition-transform", expandedKey === `${platform}-${prompt.id}` && "rotate-90 text-primary")} />
+                                        <p className="text-sm leading-snug line-clamp-2">{prompt.text}</p>
+                                      </div>
                                       {prompt.isWinning && (
                                         <Badge className="text-[10px] px-1.5 py-0 h-4 bg-amber-100 text-amber-800 border-amber-200 font-medium">
                                           勝ち筋
