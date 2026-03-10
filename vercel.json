@@ -1,4 +1,12 @@
 {
+  "functions": {
+    "src/app/api/measure/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/cron/measure/route.ts": {
+      "maxDuration": 300
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/measure",
