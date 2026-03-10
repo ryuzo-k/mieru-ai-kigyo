@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import {
   LayoutDashboard,
   MessageSquare,
@@ -11,6 +11,7 @@ import {
   Mail,
   Settings,
   Zap,
+  Building2,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -60,6 +61,9 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const companyId = searchParams.get('company') ?? ''
+  const companySuffix = companyId ? `?company=${companyId}` : ''
 
   return (
     <Sidebar>
@@ -85,7 +89,7 @@ export function AppSidebar() {
                     asChild
                     isActive={pathname === item.href}
                   >
-                    <Link href={item.href}>
+                    <Link href={`${item.href}${companySuffix}`}>
                       <item.icon className="h-4 w-4" />
                       <span>{item.title}</span>
                     </Link>
@@ -103,9 +107,17 @@ export function AppSidebar() {
               asChild
               isActive={pathname === '/settings'}
             >
-              <Link href="/settings">
+              <Link href={`/settings${companySuffix}`}>
                 <Settings className="h-4 w-4" />
                 <span>設定</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Link href="/companies">
+                <Building2 className="h-4 w-4" />
+                <span>← 企業一覧に戻る</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

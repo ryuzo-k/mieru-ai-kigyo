@@ -9,6 +9,7 @@ import { Step2BrandDetails } from './step2-brand-details'
 import { Step3PromptsGeneration } from './step3-prompts-generation'
 import { StoreInfo, Prompt } from '@/types'
 import { saveStore, savePrompts, completeSetup, generateId } from '@/lib/storage'
+import { createCompanyInDB, savePromptsToDB } from '@/lib/db'
 
 const STEPS = ['基本情報', 'ブランド詳細', 'プロンプト生成']
 
@@ -29,7 +30,12 @@ const defaultStoreInfo: StoreInfo = {
   updatedAt: '',
 }
 
-export function SetupWizard() {
+interface SetupWizardProps {
+  /** true のとき：追加会社モード（localStorage を上書きしない） */
+  isNew?: boolean
+}
+
+export function SetupWizard({ isNew = false }: SetupWizardProps) {
   const router = useRouter()
   const [currentStep, setCurrentStep] = useState(0)
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo)
@@ -46,19 +52,33 @@ export function SetupWizard() {
     setCurrentStep(2)
   }
 
-  const handleStep3Complete = (finalPrompts: Prompt[]) => {
+  const handleStep3Complete = async (finalPrompts: Prompt[]) => {
     const now = new Date().toISOString()
+    const companyId = generateId()
     const finalStore: StoreInfo = {
       ...storeInfo,
-      id: generateId(),
+      id: companyId,
       createdAt: now,
       updatedAt: now,
     }
 
-    saveStore({ store: finalStore })
-    savePrompts(finalPrompts)
-    completeSetup()
-    router.push('/')
+    if (!isNew) {
+      // 通常セットアップ：localStorageにも保存
+      saveStore({ store: finalStore })
+      savePrompts(finalPrompts)
+      completeSetup()
+    }
+
+    // Supabaseに保存
+    try {
+      await createCompanyInDB(finalStore)
+      await savePromptsToDB(finalPrompts, companyId)
+    } catch (e) {
+      console.error('Supabase保存エラー:', e)
+    }
+
+    // 企業一覧へリダイレクト
+    router.push('/companies')
   }
 
   const handleBack = () => {
@@ -75,7 +95,9 @@ export function SetupWizard() {
           </div>
           <div>
             <h1 className="text-xl font-bold">MiEL for Kigyo</h1>
-            <p className="text-sm text-muted-foreground">企業向け初期設定ウィザード</p>
+            <p className="text-sm text-muted-foreground">
+              {isNew ? '企業追加ウィザード' : '企業向け初期設定ウィザード'}
+            </p>
           </div>
         </div>
 
