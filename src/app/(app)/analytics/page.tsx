@@ -278,11 +278,8 @@ export default function AnalyticsPage() {
     setMeasuring(true)
     setMeasureProgress(0)
 
-    // APIキーが設定されていない場合はサーバーの環境変数を使用
-    const platformsToUse: Platform[] = ['claude']
-    if (apiKeys.openai) platformsToUse.push('chatgpt')
-    if (apiKeys.gemini) platformsToUse.push('gemini')
-    if (apiKeys.perplexity) platformsToUse.push('perplexity')
+    // サーバーの環境変数を使用するため全プラットフォームを計測
+    const platformsToUse: Platform[] = ['claude', 'chatgpt', 'gemini', 'perplexity']
 
     const total = measurablePrompts.length
 
