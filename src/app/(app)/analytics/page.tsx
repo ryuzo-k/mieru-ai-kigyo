@@ -224,10 +224,11 @@ export default function AnalyticsPage() {
 
   const allResults = sessions.flatMap((s) => s.results)
 
-  // Sales + awareness prompts (up to 5 for measurement)
-  const measurablePrompts = prompts
-    .filter((p) => p.category === 'sales' || p.category === 'awareness')
-    .slice(0, 5)
+  // All prompts (sorted: winning first, then by display rate desc)
+  const measurablePrompts = [...prompts].sort((a, b) => {
+    if (a.isWinning !== b.isWinning) return a.isWinning ? -1 : 1
+    return (b.displayRate ?? 0) - (a.displayRate ?? 0)
+  })
 
   // Build stats per prompt, filtered by a given platform (or null = all)
   function buildStats(filterPlatform: Platform | null): PromptStat[] {
@@ -424,7 +425,7 @@ ${allStats
             今すぐ計測
           </CardTitle>
           <CardDescription>
-            売上・認知カテゴリのプロンプト（最大5件）を利用可能なプラットフォームで一括計測します
+            全プロンプトを利用可能なプラットフォームで一括計測します（勝ち筋プロンプト優先）
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
