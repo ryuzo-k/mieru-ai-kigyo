@@ -249,81 +249,65 @@ export async function POST(request: NextRequest) {
     const geminiKey = clientApiKeys?.gemini || process.env.GOOGLE_GEMINI_API_KEY || ''
     const perplexityKey = clientApiKeys?.perplexity || process.env.PERPLEXITY_API_KEY || ''
 
+    const MEASURE_TIMES = 3
     const results: MeasurementResult[] = []
     const now = new Date().toISOString()
 
     for (const platform of platforms) {
-      let responseData: { response: string; error?: string }
-
-      switch (platform) {
-        case 'claude':
-          if (!anthropicKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
-            continue
-          }
-          responseData = await measureWithClaude(promptText, anthropicKey)
-          break
-        case 'chatgpt':
-          if (!openaiKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
-            continue
-          }
-          responseData = await measureWithOpenAI(promptText, openaiKey)
-          break
-        case 'gemini':
-          if (!geminiKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
-            continue
-          }
-          responseData = await measureWithGemini(promptText, geminiKey)
-          break
-        case 'perplexity':
-          if (!perplexityKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
-            continue
-          }
-          responseData = await measureWithPerplexity(promptText, perplexityKey)
-          break
-        default:
-          continue
-      }
-
-      if (responseData.error || !responseData.response) {
-        results.push({
-          id: generateId(),
-          promptId,
-          platform,
-          response: responseData.error || '',
-          mentioned: false,
-          mentionPosition: null,
-          sentiment: 'neutral',
-          positiveElements: '',
-          negativeElements: '',
-          citedUrls: [],
-          citedContext: '',
-          citedCompetitors: [],
-          competitorMentions: {},
-          measuredAt: now,
-        })
+      // Check API key availability
+      const platformKey = { claude: anthropicKey, chatgpt: openaiKey, gemini: geminiKey, perplexity: perplexityKey }[platform]
+      if (!platformKey) {
+        results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, rawResponses: [], measuredAt: now })
         continue
       }
 
-      const analysis = await analyzeSentiment(responseData.response, storeName, competitors, anthropicKey)
+      // Call the platform MEASURE_TIMES times
+      const rawResponses: string[] = []
+      let mentionCount = 0
 
-      const lowerResponse = responseData.response.toLowerCase()
-      const lowerName = storeName.toLowerCase()
-      const mentioned = lowerResponse.includes(lowerName)
+      for (let trial = 0; trial < MEASURE_TIMES; trial++) {
+        if (trial > 0) await new Promise(r => setTimeout(r, 300)) // 300ms delay
+
+        let responseData: { response: string; error?: string }
+        switch (platform) {
+          case 'claude': responseData = await measureWithClaude(promptText, anthropicKey); break
+          case 'chatgpt': responseData = await measureWithOpenAI(promptText, openaiKey); break
+          case 'gemini': responseData = await measureWithGemini(promptText, geminiKey); break
+          case 'perplexity': responseData = await measureWithPerplexity(promptText, perplexityKey); break
+          default: continue
+        }
+
+        if (!responseData.error && responseData.response) {
+          rawResponses.push(responseData.response)
+          const lowerResp = responseData.response.toLowerCase()
+          if (lowerResp.includes(storeName.toLowerCase())) mentionCount++
+        }
+      }
+
+      if (rawResponses.length === 0) {
+        results.push({ id: generateId(), promptId, platform, response: '', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, rawResponses: [], measuredAt: now })
+        continue
+      }
+
+      // Use the response with mention (or last one) for detailed analysis
+      const bestResponse = rawResponses.find(r => r.toLowerCase().includes(storeName.toLowerCase())) || rawResponses[rawResponses.length - 1]
+      const displayRate = Math.round((mentionCount / rawResponses.length) * 100)
+
+      const analysis = await analyzeSentiment(bestResponse, storeName, competitors, anthropicKey)
+
+      const lowerBest = bestResponse.toLowerCase()
+      const mentioned = mentionCount > 0
 
       const competitorMentions: Record<string, boolean> = {}
       for (const competitor of competitors) {
-        competitorMentions[competitor] = lowerResponse.includes(competitor.toLowerCase())
+        competitorMentions[competitor] = lowerBest.includes(competitor.toLowerCase())
       }
 
       results.push({
         id: generateId(),
         promptId,
         platform,
-        response: responseData.response,
+        response: bestResponse,
         mentioned,
         mentionPosition: analysis.mentionPosition,
         sentiment: analysis.sentiment,
@@ -333,7 +317,10 @@ export async function POST(request: NextRequest) {
         citedContext: analysis.citedContext,
         citedCompetitors: analysis.citedCompetitors,
         competitorMentions,
+        competitorRankings: analysis.competitorRankings,
+        rawResponses,
         measuredAt: now,
+        displayRate,
       })
     }
 

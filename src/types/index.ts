@@ -83,6 +83,8 @@ export interface MeasurementResult {
   citedCompetitors: string[]  // 同時に言及された競合
   competitorMentions: Record<string, boolean>
   competitorRankings?: {name: string; rank: number; snippet: string}[]  // 競合の出現順位
+  rawResponses?: string[]  // 3回分の実際のAI回答
+  displayRate?: number  // 3回計測の表示率%
   measuredAt: string
 }
 

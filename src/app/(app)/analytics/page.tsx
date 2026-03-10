@@ -897,6 +897,32 @@ ${allStats
                               </div>
                             </div>
                           )}
+                          {/* Raw AI responses — 3回分の実際の回答 */}
+                          {((latestResult as MeasurementResult).rawResponses ?? []).length > 0 && (
+                            <details className="group">
+                              <summary className="cursor-pointer text-xs font-medium text-muted-foreground flex items-center gap-1 select-none hover:text-foreground transition-colors">
+                                <span className="group-open:rotate-90 inline-block transition-transform">▶</span>
+                                AIの実際の回答を見る（{((latestResult as MeasurementResult).rawResponses ?? []).length}回分）
+                              </summary>
+                              <div className="mt-2 space-y-2">
+                                {((latestResult as MeasurementResult).rawResponses ?? []).map((resp, i) => {
+                                  const isMentioned = resp.toLowerCase().includes((store?.name ?? '').toLowerCase())
+                                  return (
+                                    <div key={i} className={cn("rounded-md border px-3 py-2 text-xs", isMentioned ? "border-green-300 bg-green-50" : "border-border bg-muted/30")}>
+                                      <div className="flex items-center gap-2 mb-1.5">
+                                        <span className="font-medium text-muted-foreground">試行 {i+1}</span>
+                                        {isMentioned
+                                          ? <span className="text-green-700 font-medium">✓ 言及あり</span>
+                                          : <span className="text-slate-500">— 言及なし</span>
+                                        }
+                                      </div>
+                                      <pre className="whitespace-pre-wrap leading-relaxed font-sans text-foreground/80">{resp}</pre>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </details>
+                          )}
                         </>
                       )}
 
