@@ -81,10 +81,10 @@ const apiKeyFields: ApiKeyField[] = [
 ]
 
 const businessTypeLabels: Record<BusinessType, string> = {
-  food: '飲食',
-  beauty: '美容',
-  medical: '医療',
-  retail: '小売',
+  food: '小売・EC',
+  beauty: 'コンサルティング・専門サービス',
+  medical: '医療・ヘルスケア',
+  retail: '製造・メーカー',
   other: 'その他',
 }
 

@@ -520,7 +520,7 @@ export default function OutreachPage() {
               </Label>
               <Input
                 id="focusPageKeyword"
-                placeholder="例: 渋谷 美容室"
+                placeholder="例: 渋谷区 IT企業向けオフィス"
                 value={focusPageKeyword}
                 onChange={(e) => {
                   setFocusPageKeyword(e.target.value)
