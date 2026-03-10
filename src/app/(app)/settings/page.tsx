@@ -29,12 +29,12 @@ import {
   saveApiKeys,
   getMeasurementSchedule,
   saveMeasurementSchedule,
-  getStoreInfo,
-  saveStoreInfo,
   resetStore,
   getWordPressConfig,
   saveWordPressConfig,
 } from '@/lib/storage'
+import { getStoreFromDB, saveStoreToDB } from '@/lib/db'
+import { useCompany } from '@/context/company-context'
 import { ApiKeys, StoreInfo, BusinessType, WordPressConfig } from '@/types'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -90,6 +90,7 @@ const businessTypeLabels: Record<BusinessType, string> = {
 
 export default function SettingsPage() {
   const router = useRouter()
+  const { companyId } = useCompany()
   const [apiKeys, setApiKeys] = useState<ApiKeys>({
     anthropic: '',
     openai: '',
@@ -112,11 +113,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setApiKeys(getApiKeys())
-    setStore(getStoreInfo())
-    setEditStore(getStoreInfo() || {})
     setSchedule(getMeasurementSchedule())
     setWpConfig(getWordPressConfig())
-  }, [])
+    getStoreFromDB(companyId).then((s) => {
+      setStore(s)
+      setEditStore(s || {})
+    }).catch(() => {})
+  }, [companyId])
 
   const handleSaveApiKey = (key: keyof ApiKeys) => {
     saveApiKeys({ [key]: apiKeys[key] })
@@ -132,10 +135,10 @@ export default function SettingsPage() {
     setTimeout(() => setSavedKeys({}), 2000)
   }
 
-  const handleSaveStore = () => {
+  const handleSaveStore = async () => {
     if (!store) return
-    const updated = { ...store, ...editStore, updatedAt: new Date().toISOString() }
-    saveStoreInfo(updated)
+    const updated = { ...store, ...editStore, updatedAt: new Date().toISOString() } as StoreInfo
+    await saveStoreToDB(updated, companyId)
     setStore(updated)
     setStoreSaved(true)
     setTimeout(() => setStoreSaved(false), 2000)

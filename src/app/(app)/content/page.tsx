@@ -14,9 +14,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatDate } from '@/lib/utils'
 import {
-  getStoreInfo, getPrompts, getGeneratedContents, saveGeneratedContents,
+  getGeneratedContents, saveGeneratedContents,
   getApiKeys, generateId,
 } from '@/lib/storage'
+import { getStoreFromDB, getPromptsFromDB } from '@/lib/db'
+import { useCompany } from '@/context/company-context'
 import { StoreInfo, Prompt, GeneratedContent } from '@/types'
 import type { ContentSuggestion } from '@/app/api/suggest-contents/route'
 import type { CompetitorBlogReport as CompetitorBlogReportType } from '@/app/api/analyze-competitor-blogs/route'
@@ -44,12 +46,15 @@ const IMPACT_LABELS: Record<string, string> = {
 // ── Competitor Analysis ────────────────────────────────────────────────────
 
 function CompetitorAnalysisTab() {
+  const { companyId } = useCompany()
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
   const [report, setReport] = useState<CompetitorBlogReportType | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => { setStore(getStoreInfo()) }, [])
+  useEffect(() => {
+    getStoreFromDB(companyId).then(setStore).catch(() => {})
+  }, [companyId])
 
   const handleAnalyze = async () => {
     const apiKeys = getApiKeys()
@@ -151,6 +156,7 @@ function CompetitorAnalysisTab() {
 // ── Main Page ──────────────────────────────────────────────────────────────
 
 export default function ContentPage() {
+  const { companyId } = useCompany()
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [contents, setContents] = useState<GeneratedContent[]>([])
@@ -169,13 +175,11 @@ export default function ContentPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   useEffect(() => {
-    const s = getStoreInfo()
-    const p = getPrompts()
-    setStore(s)
-    setPrompts(p)
+    getStoreFromDB(companyId).then(setStore).catch(() => {})
+    getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
     setContents(getGeneratedContents())
     setApiKey(getApiKeys().anthropic || '')
-  }, [])
+  }, [companyId])
 
   const winningPrompts = prompts.filter((p) => p.isWinning)
   const targetPrompts = winningPrompts.length > 0 ? winningPrompts : prompts

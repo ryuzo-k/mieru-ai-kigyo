@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Platform, MeasurementResult, Sentiment } from '@/types'
+import { saveMeasurementResultToDB } from '@/lib/db'
 
 function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
@@ -352,6 +353,7 @@ export async function POST(request: NextRequest) {
       competitors,
       platforms,
       apiKeys: clientApiKeys,
+      companyId,
     }: {
       promptId: string
       promptText: string
@@ -360,6 +362,7 @@ export async function POST(request: NextRequest) {
       competitors: string[]
       platforms: Platform[]
       apiKeys?: Record<string, string>
+      companyId?: string
     } = await request.json()
 
     const anthropicKey = clientApiKeys?.claude || process.env.ANTHROPIC_API_KEY || ''
@@ -501,6 +504,10 @@ export async function POST(request: NextRequest) {
         displayRate,
         measuredAt: now,
       })
+    }
+
+    for (const result of results) {
+      await saveMeasurementResultToDB(result, companyId || 'company_default').catch(() => {})
     }
 
     return NextResponse.json({ results })

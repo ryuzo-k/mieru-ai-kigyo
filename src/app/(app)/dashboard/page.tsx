@@ -16,7 +16,8 @@ import {
   XCircle,
   Flame,
 } from 'lucide-react'
-import { getRisingPrompts, type PromptTrend } from '@/lib/db'
+import { getRisingPrompts, getStoreFromDB, getPromptsFromDB, type PromptTrend } from '@/lib/db'
+import { useCompany } from '@/context/company-context'
 import {
   Card,
   CardContent,
@@ -37,8 +38,6 @@ import {
   Legend,
 } from 'recharts'
 import {
-  getStoreInfo,
-  getPrompts,
   getMeasurementSessions,
   getWordPressConfig,
 } from '@/lib/storage'
@@ -46,6 +45,7 @@ import { StoreInfo, Prompt, MeasurementSession } from '@/types'
 
 
 export default function DashboardPage() {
+  const { companyId } = useCompany()
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [sessions, setSessions] = useState<MeasurementSession[]>([])
@@ -54,15 +54,15 @@ export default function DashboardPage() {
   const [risingPrompts, setRisingPrompts] = useState<PromptTrend[]>([])
 
   useEffect(() => {
-    setStore(getStoreInfo())
-    setPrompts(getPrompts())
-    setSessions(getMeasurementSessions())
     const wpConfig = getWordPressConfig()
     setWpConnected(wpConfig.connected)
     setWpSiteUrl(wpConfig.siteUrl)
+    setSessions(getMeasurementSessions())
+    getStoreFromDB(companyId).then(setStore).catch(() => {})
+    getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
     // Supabaseから急上昇プロンプトを取得
     getRisingPrompts(10).then(setRisingPrompts).catch(() => {})
-  }, [])
+  }, [companyId])
 
   // Compute stats
   const winningPrompts = prompts.filter((p) => p.isWinning)

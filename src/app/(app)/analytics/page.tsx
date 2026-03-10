@@ -39,19 +39,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import {
-  getStoreInfo,
-  getPrompts,
-  getMeasurementSessions,
-  addMeasurementSession,
-  updateMeasurementSession,
   getApiKeys,
-  generateId,
 } from '@/lib/storage'
+import { getStoreFromDB, getPromptsFromDB, getMeasurementResultsFromDB } from '@/lib/db'
+import { useCompany } from '@/context/company-context'
 import {
   StoreInfo,
   Prompt,
   Platform,
-  MeasurementSession,
   MeasurementResult,
   Sentiment,
 } from '@/types'
@@ -186,9 +181,10 @@ function SentimentBadge({ sentiment }: { sentiment: Sentiment }) {
 // ────────────────────────────────────────────────────────────────────────────
 
 export default function AnalyticsPage() {
+  const { companyId } = useCompany()
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [prompts, setPrompts] = useState<Prompt[]>([])
-  const [sessions, setSessions] = useState<MeasurementSession[]>([])
+  const [allResults, setAllResults] = useState<MeasurementResult[]>([])
   const [measuring, setMeasuring] = useState(false)
   const [expandedKey, setExpandedKey] = useState<string | null>(null)
   const [measureProgress, setMeasureProgress] = useState(0)
@@ -203,12 +199,12 @@ export default function AnalyticsPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  // Load from localStorage on mount
+  // Load from DB on mount / company change
   useEffect(() => {
-    setStore(getStoreInfo())
-    setPrompts(getPrompts())
-    setSessions(getMeasurementSessions())
-  }, [])
+    getStoreFromDB(companyId).then(setStore).catch(() => {})
+    getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
+    getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
+  }, [companyId])
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -225,8 +221,6 @@ export default function AnalyticsPage() {
     chatgpt: true, // サーバー側で OPENAI_API_KEY を使用
     perplexity: true, // サーバー側で PERPLEXITY_API_KEY を使用
   }
-
-  const allResults = sessions.flatMap((s) => s.results)
 
   // All prompts (sorted: winning first, then by display rate desc)
   const measurablePrompts = [...prompts].sort((a, b) => {
@@ -290,16 +284,6 @@ export default function AnalyticsPage() {
     if (apiKeys.gemini) platformsToUse.push('gemini')
     if (apiKeys.perplexity) platformsToUse.push('perplexity')
 
-    const session: MeasurementSession = {
-      id: generateId(),
-      startedAt: new Date().toISOString(),
-      completedAt: null,
-      platforms: platformsToUse,
-      results: [],
-    }
-    addMeasurementSession(session)
-
-    const allNewResults: MeasurementResult[] = []
     const total = measurablePrompts.length
 
     for (let i = 0; i < measurablePrompts.length; i++) {
@@ -316,7 +300,8 @@ export default function AnalyticsPage() {
             promptId: prompt.id,
             promptText: prompt.text,
             storeName: store.name,
-              brandName: store.brandName || '',
+            brandName: store.brandName || '',
+            companyId,
             competitors: store.competitors.map((c) => c.name),
             platforms: platformsToUse,
             apiKeys: {
@@ -329,7 +314,8 @@ export default function AnalyticsPage() {
         })
         const data = await res.json()
         if (data.results) {
-          allNewResults.push(...data.results)
+          // Results are saved to DB by the API route
+          setAllResults((prev) => [...prev, ...data.results])
         }
       } catch (e) {
         console.error('計測エラー:', e)
@@ -338,11 +324,8 @@ export default function AnalyticsPage() {
       setMeasureProgress(Math.round(((i + 1) / total) * 100))
     }
 
-    updateMeasurementSession(session.id, {
-      completedAt: new Date().toISOString(),
-      results: allNewResults,
-    })
-    setSessions(getMeasurementSessions())
+    // Reload all results from DB after measurement
+    getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
     setMeasuring(false)
     setMeasureProgressText('')
   }

@@ -56,12 +56,10 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Prompt, PromptCategory, PromptDifficulty, PromptPriority } from '@/types'
 import {
-  getPrompts,
-  addPrompt,
-  updatePrompt,
-  deletePrompt as deletePromptStorage,
   generateId,
 } from '@/lib/storage'
+import { getPromptsFromDB, savePromptToDB, deletePromptFromDB } from '@/lib/db'
+import { useCompany } from '@/context/company-context'
 import { cn } from '@/lib/utils'
 
 // ---- constants ----
@@ -122,6 +120,7 @@ const defaultForm: PromptForm = {
 
 // ---- component ----
 export default function PromptsPage() {
+  const { companyId } = useCompany()
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<FilterCategory>('all')
@@ -132,8 +131,8 @@ export default function PromptsPage() {
   const [formError, setFormError] = useState('')
 
   useEffect(() => {
-    setPrompts(getPrompts())
-  }, [])
+    getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
+  }, [companyId])
 
   // ---- derived counts ----
   const totalCount = prompts.length
@@ -178,7 +177,7 @@ export default function PromptsPage() {
     setDialogOpen(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.text.trim()) {
       setFormError('プロンプトテキストを入力してください')
       return
@@ -186,34 +185,41 @@ export default function PromptsPage() {
     setFormError('')
     const now = new Date().toISOString()
     if (editingId) {
-      updatePrompt(editingId, { ...form, updatedAt: now })
+      const existing = prompts.find((p) => p.id === editingId)
+      if (existing) {
+        await savePromptToDB({ ...existing, ...form, updatedAt: now }, companyId)
+      }
     } else {
-      addPrompt({
+      await savePromptToDB({
         id: generateId(),
         ...form,
         isWinning: false,
+        displayRate: undefined,
+        citedSources: [],
+        citedCompetitors: [],
+        citedContext: '',
         createdAt: now,
         updatedAt: now,
-      })
+      }, companyId)
     }
-    setPrompts(getPrompts())
+    const updated = await getPromptsFromDB(companyId)
+    setPrompts(updated)
     setDialogOpen(false)
   }
 
-  const handleToggleWinning = (id: string) => {
+  const handleToggleWinning = async (id: string) => {
     const prompt = prompts.find((p) => p.id === id)
     if (!prompt) return
-    updatePrompt(id, {
-      isWinning: !prompt.isWinning,
-      updatedAt: new Date().toISOString(),
-    })
-    setPrompts(getPrompts())
+    await savePromptToDB({ ...prompt, isWinning: !prompt.isWinning, updatedAt: new Date().toISOString() }, companyId)
+    const updated = await getPromptsFromDB(companyId)
+    setPrompts(updated)
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteId) return
-    deletePromptStorage(deleteId)
-    setPrompts(getPrompts())
+    await deletePromptFromDB(deleteId)
+    const updated = await getPromptsFromDB(companyId)
+    setPrompts(updated)
     setDeleteId(null)
   }
 
