@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   Play,
   Loader2,
@@ -56,6 +56,7 @@ import {
   Sentiment,
 } from '@/types'
 import { cn, formatDate } from '@/lib/utils'
+import { PromptDetailPanel } from '@/components/analytics/PromptDetailPanel'
 
 // ────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -358,7 +359,7 @@ export default function AnalyticsPage() {
     setChatLoading(true)
 
     const systemContext = `あなたはGEO（生成エンジン最適化）対策の専門アナリストです。
-企業「${store?.name ?? ''}」の計測データを分析してアドバイスを提供してください。
+企業「${store?.name ?? ""}」の計測データを分析してアドバイスを提供してください。
 
 【計測データサマリー】
 総計測件数: ${totalMeasured}
@@ -637,8 +638,8 @@ ${allStats
                                 lastMeasuredAt,
                                 results,
                               }) => (
+                                <React.Fragment key={prompt.id}>
                                 <TableRow
-                                  key={prompt.id}
                                   className={cn("align-middle cursor-pointer hover:bg-muted/30 transition-colors", expandedKey === `${platform}-${prompt.id}` && "bg-primary/5")}
                                   onClick={() => setExpandedKey(expandedKey === `${platform}-${prompt.id}` ? null : `${platform}-${prompt.id}`)}
                                 >
@@ -708,6 +709,24 @@ ${allStats
                                     )}
                                   </TableCell>
                                 </TableRow>
+                                {expandedKey === `${platform}-${prompt.id}` && (
+                                  <TableRow className="bg-primary/5 hover:bg-primary/5">
+                                    <TableCell colSpan={6} className="px-4 pb-4 pt-0">
+                                      {results.length > 0 ? (
+                                        <PromptDetailPanel
+                                          promptText={prompt.text}
+                                          result={results[results.length - 1]}
+                                          storeName={store?.name ?? ''}
+                                        />
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground py-2">
+                                          まだ計測されていません。「今すぐ計測」から計測を開始してください。
+                                        </p>
+                                      )}
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                                </React.Fragment>
                               )
                             )
                           )}
@@ -913,7 +932,7 @@ ${allStats
                               </summary>
                               <div className="mt-2 space-y-2">
                                 {((latestResult as MeasurementResult).rawResponses ?? []).map((resp, i) => {
-                                  const isMentioned = resp.toLowerCase().includes((store?.name ?? '').toLowerCase())
+                                  const isMentioned = resp.toLowerCase().includes((store?.name ?? "").toLowerCase())
                                   return (
                                     <div key={i} className={cn("rounded-md border px-3 py-2 text-xs", isMentioned ? "border-green-300 bg-green-50" : "border-border bg-muted/30")}>
                                       <div className="flex items-center gap-2 mb-1.5">
