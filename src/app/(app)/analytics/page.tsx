@@ -277,54 +277,68 @@ export default function AnalyticsPage() {
     if (!store || measurablePrompts.length === 0) return
     setMeasuring(true)
     setMeasureProgress(0)
+    setMeasureProgressText('計測ジョブを開始中...')
 
-    // サーバーの環境変数を使用するため全プラットフォームを計測
-    const platformsToUse: Platform[] = ['claude', 'chatgpt', 'gemini', 'perplexity']
+    try {
+      // サーバー側でバックグラウンド計測を開始（ページ離脱しても継続）
+      const res = await fetch('/api/measure-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          promptIds: measurablePrompts.map((p) => p.id),
+          platforms: ['claude', 'chatgpt', 'gemini', 'perplexity'],
+          storeName: store.name,
+          brandName: store.brandName || '',
+          competitors: store.competitors.map((c) => c.name),
+          apiKeys: {},
+        }),
+      })
+      const { jobId, total } = await res.json()
 
-    const total = measurablePrompts.length
-
-    for (let i = 0; i < measurablePrompts.length; i++) {
-      const prompt = measurablePrompts[i]
-      const displayText =
-        prompt.text.length > 30 ? prompt.text.substring(0, 30) + '…' : prompt.text
-      setMeasureProgressText(`「${displayText}」を計測中`)
-
-      try {
-        const res = await fetch('/api/measure', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            promptId: prompt.id,
-            promptText: prompt.text,
-            storeName: store.name,
-            brandName: store.brandName || '',
-            companyId,
-            competitors: store.competitors.map((c) => c.name),
-            platforms: platformsToUse,
-            apiKeys: {
-              claude: apiKeys.anthropic,
-              chatgpt: apiKeys.openai,
-              gemini: apiKeys.gemini,
-              perplexity: apiKeys.perplexity,
-            },
-          }),
-        })
-        const data = await res.json()
-        if (data.results) {
-          // Results are saved to DB by the API route
-          setAllResults((prev) => [...prev, ...data.results])
-        }
-      } catch (e) {
-        console.error('計測エラー:', e)
+      if (!jobId) {
+        setMeasuring(false)
+        setMeasureProgressText('')
+        return
       }
 
-      setMeasureProgress(Math.round(((i + 1) / total) * 100))
-    }
+      setMeasureProgressText(`計測中（0/${total}件完了）`)
 
-    // Reload all results from DB after measurement
-    getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
-    setMeasuring(false)
-    setMeasureProgressText('')
+      // 5秒ごとに進捗をポーリング
+      const interval = setInterval(async () => {
+        try {
+          const prog = await fetch(`/api/measure-all?jobId=${jobId}&companyId=${companyId}`)
+          const job = await prog.json()
+
+          const pct = job.totalPrompts > 0
+            ? Math.round((job.completedPrompts / job.totalPrompts) * 100)
+            : 0
+          setMeasureProgress(pct)
+
+          if (job.currentPromptText) {
+            const short = job.currentPromptText.length > 30
+              ? job.currentPromptText.substring(0, 30) + '…'
+              : job.currentPromptText
+            setMeasureProgressText(`「${short}」を計測中（${job.completedPrompts}/${job.totalPrompts}件）`)
+          }
+
+          if (job.status === 'completed' || job.status === 'failed') {
+            clearInterval(interval)
+            setMeasuring(false)
+            setMeasureProgressText('')
+            setMeasureProgress(100)
+            // DBから最新結果を取得
+            getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
+          }
+        } catch {
+          // ポーリングエラーは無視して継続
+        }
+      }, 5000)
+    } catch (e) {
+      console.error('計測開始エラー:', e)
+      setMeasuring(false)
+      setMeasureProgressText('')
+    }
   }
 
   const handleChat = async () => {
