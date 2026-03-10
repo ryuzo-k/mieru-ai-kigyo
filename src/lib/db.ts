@@ -125,6 +125,12 @@ export async function deletePromptFromDB(id: string): Promise<void> {
 // ── Measurement Results ────────────────────────────────────────────────────
 
 export async function saveMeasurementResultToDB(result: MeasurementResult): Promise<void> {
+  const r = result as MeasurementResult & {
+    citedContext?: string
+    citedCompetitors?: string[]
+    competitorRankings?: { name: string; rank: number; snippet: string }[]
+    rawResponses?: string[]
+  }
   await getClient().from('measurement_results').upsert({
     id: result.id,
     prompt_id: result.promptId,
@@ -136,9 +142,11 @@ export async function saveMeasurementResultToDB(result: MeasurementResult): Prom
     positive_elements: result.positiveElements,
     negative_elements: result.negativeElements,
     cited_urls: result.citedUrls,
-    cited_context: (result as MeasurementResult & { citedContext?: string }).citedContext || '',
-    cited_competitors: (result as MeasurementResult & { citedCompetitors?: string[] }).citedCompetitors || [],
+    cited_context: r.citedContext || '',
+    cited_competitors: r.citedCompetitors || [],
     competitor_mentions: result.competitorMentions,
+    competitor_rankings: r.competitorRankings || [],
+    raw_responses: r.rawResponses || [],
     measured_at: result.measuredAt,
   })
 }
@@ -166,6 +174,8 @@ export async function getMeasurementResultsFromDB(promptId?: string): Promise<Me
     citedContext: d.cited_context || '',
     citedCompetitors: d.cited_competitors || [],
     competitorMentions: d.competitor_mentions || {},
+    competitorRankings: d.competitor_rankings || [],
+    rawResponses: d.raw_responses || [],
     measuredAt: d.measured_at,
   }))
 }
