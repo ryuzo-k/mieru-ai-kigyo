@@ -347,6 +347,7 @@ export async function POST(request: NextRequest) {
       promptId,
       promptText,
       storeName,
+      brandName,
       competitors,
       platforms,
       apiKeys: clientApiKeys,
@@ -354,6 +355,7 @@ export async function POST(request: NextRequest) {
       promptId: string
       promptText: string
       storeName: string
+      brandName?: string
       competitors: string[]
       platforms: Platform[]
       apiKeys?: Record<string, string>
@@ -434,7 +436,9 @@ export async function POST(request: NextRequest) {
           for (const url of (responseData.citations || [])) {
             if (!apiCitations.includes(url)) apiCitations.push(url)
           }
-          if (responseData.response.toLowerCase().includes(storeName.toLowerCase())) {
+          const mentionBrand = (brandName || '').toLowerCase()
+          const mentionHit = responseData.response.toLowerCase().includes(storeName.toLowerCase()) || (mentionBrand && responseData.response.toLowerCase().includes(mentionBrand))
+          if (mentionHit) {
             mentionCount++
           }
         }

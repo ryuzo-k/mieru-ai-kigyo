@@ -66,6 +66,7 @@ function CompetitorAnalysisTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeName: store.name,
+              brandName: store.brandName || '',
           competitors: competitors.map((c) => ({ name: c.name, url: c.url })),
           clientApiKey: apiKeys.anthropic,
         }),

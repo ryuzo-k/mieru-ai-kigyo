@@ -466,6 +466,17 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
+              <Label>ブランド名 <span className="text-xs text-muted-foreground ml-1">（企業名と異なる場合。例: 法人名が「株式会社◯◯」でもAIには「◯◯」で知られている場合）</span></Label>
+              <Input
+                placeholder="AIが認識しているブランド名（空白の場合は企業名を使用）"
+                value={(editStore as StoreInfo).brandName || ''}
+                onChange={(e) =>
+                  setEditStore((prev) => ({ ...prev, brandName: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>ブランドの概要・説明</Label>
               <Textarea
                 value={(editStore as StoreInfo).description || store.description}

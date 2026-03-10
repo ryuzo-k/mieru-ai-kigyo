@@ -31,6 +31,7 @@ export interface StoreInfo {
   id: string
   businessType: BusinessType
   name: string
+  brandName?: string  // ブランド名（企業名と異なる場合）
   websiteUrl: string
   listingUrls: never[]  // 企業向けでは使用しない
   description: string

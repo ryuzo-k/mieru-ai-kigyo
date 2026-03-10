@@ -319,6 +319,7 @@ export default function AnalyticsPage() {
             promptId: prompt.id,
             promptText: prompt.text,
             storeName: store.name,
+              brandName: store.brandName || '',
             competitors: store.competitors.map((c) => c.name),
             platforms: platformsToUse,
             apiKeys: {
