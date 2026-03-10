@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/measure",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/measure",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/measure",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

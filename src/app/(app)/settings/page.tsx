@@ -375,53 +375,54 @@ export default function SettingsPage() {
       {/* Measurement Schedule */}
       <Card>
         <CardHeader>
-          <CardTitle>計測スケジュール</CardTitle>
-          <CardDescription>自動計測の実行タイミングを設定します</CardDescription>
+          <CardTitle>自動計測スケジュール</CardTitle>
+          <CardDescription>Vercel Cronで1日3回（09:00 / 13:00 / 18:00 JST）全勝ち筋プロンプトを自動計測します</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Switch
-                id="three-times"
-                checked={schedule.preset === 'three_times'}
-                onCheckedChange={(checked) => {
-                  const newSchedule = {
-                    ...schedule,
-                    preset: (checked ? 'three_times' : 'custom') as 'three_times' | 'custom',
-                  }
-                  setSchedule(newSchedule)
-                  saveMeasurementSchedule(newSchedule)
-                }}
-              />
-              <Label htmlFor="three-times">1日3回（推奨）</Label>
+          <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+            <div>
+              <p className="text-sm font-medium">自動計測を有効にする</p>
+              <p className="text-xs text-muted-foreground mt-0.5">ONにすると毎日3回、全勝ち筋プロンプトをClaudeで計測して結果をSupabaseに保存します</p>
             </div>
+            <Switch
+              id="auto-measure"
+              checked={schedule.preset === 'three_times'}
+              onCheckedChange={async (checked) => {
+                const newSchedule = { ...schedule, preset: (checked ? 'three_times' : 'custom') as 'three_times' | 'custom' }
+                setSchedule(newSchedule)
+                saveMeasurementSchedule(newSchedule)
+                // Supabaseにも保存
+                try {
+                  await fetch('/api/store', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'saveSchedule', enabled: checked, times: ['09:00', '13:00', '18:00'] }),
+                  })
+                } catch {}
+              }}
+            />
           </div>
           {schedule.preset === 'three_times' && (
-            <p className="text-sm text-muted-foreground">
-              09:00 / 13:00 / 18:00 に自動計測を実行します
-            </p>
-          )}
-          {schedule.preset === 'custom' && (
-            <div className="space-y-2">
-              <Label>カスタム計測時刻</Label>
-              <Input
-                placeholder="09:00, 13:00, 18:00"
-                value={schedule.customTimes.join(', ')}
-                onChange={(e) => {
-                  const times = e.target.value
-                    .split(',')
-                    .map((t) => t.trim())
-                    .filter(Boolean)
-                  const newSchedule = { ...schedule, customTimes: times }
-                  setSchedule(newSchedule)
-                  saveMeasurementSchedule(newSchedule)
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                カンマ区切りで複数の時刻を指定できます（例: 09:00, 15:00, 21:00）
-              </p>
+            <div className="rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+              ✓ 自動計測が有効です（09:00 / 13:00 / 18:00 JST）
             </div>
           )}
+          <div className="flex gap-2">
+            <button
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/cron/measure')
+                  const data = await res.json()
+                  alert(`手動計測完了: ${data.measuredCount ?? 0}件計測しました`)
+                } catch {
+                  alert('計測に失敗しました。APIキーとSupabase設定を確認してください。')
+                }
+              }}
+            >
+              今すぐ手動計測を実行
+            </button>
+          </div>
         </CardContent>
       </Card>
 
