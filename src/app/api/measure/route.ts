@@ -24,7 +24,8 @@ async function measureWithClaude(
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 1500,
         tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
-        messages: [{ role: 'user', content: prompt }],
+        system: '必ず日本語で回答してください。',
+        messages: [{ role: 'system', content: '必ず日本語で回答してください。' }, { role: 'user', content: prompt }],
       }),
     })
     if (!res.ok) {
@@ -85,7 +86,7 @@ async function measureWithOpenAI(
         model: 'gpt-4o-search-preview',
         max_tokens: 1500,
         web_search_options: {},
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'system', content: '必ず日本語で回答してください。' }, { role: 'user', content: prompt }],
       }),
     })
     if (!res.ok) {
@@ -126,7 +127,7 @@ async function measureWithGemini(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [{ parts: [{ text: prompt + '\n\n必ず日本語で回答してください。' }] }],
           tools: [{ google_search: {} }],
         }),
       }

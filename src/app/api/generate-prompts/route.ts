@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { StoreInfo, Prompt, PromptCategory, PromptDifficulty, PromptPriority } from '@/types'
+import { StoreInfo, Prompt, PromptCategory } from '@/types'
 
 const industryTypeLabel: Record<string, string> = {
   food: '小売・EC',
@@ -33,63 +33,66 @@ export async function POST(request: NextRequest) {
     }
 
     const industryLabel = industryTypeLabel[store.businessType] || store.businessType
+    const brandName = store.brandName || store.name
 
-    const systemPrompt = `あなたはGEO（Generative Engine Optimization）対策の専門家です。
-企業が提供する情報をもとに、AIチャットボット（Claude、ChatGPT、Gemini等）での検索・回答で当該企業が上位表示・推薦されるための「勝ち筋プロンプト」を網羅的に生成してください。
+    const systemPrompt = `あなたはGEO（Generative Engine Optimization）の専門家です。
+企業情報をもとに、AIチャットボット（Claude・ChatGPT・Gemini・Perplexity等）で当該企業が推薦・言及されるための「GEO計測用プロンプト」を生成します。
 
-以下のカテゴリで合計15〜20個のプロンプトを生成してください：
+## 生成方針
 
-**売上に関するプロンプト（商談・問い合わせ・選定）**
-- 推薦・比較系（例：「${industryLabel}業界のGEO対策でおすすめのサービスは？」）
-- 課題解決系（例：「AIに自社を認識してもらうにはどうすればいい？」）
-- 競合比較系（例：「GEO対策ツールを比較したい」）
+### ① 売上直結プロンプト（awareness カテゴリ）
+ユーザーが購買・発注・問い合わせを検討しているときに入力するプロンプト。
+このプロンプトで自社が推薦・言及されれば直接商談につながる。
 
-**ブランド認知に関するプロンプト**
-- 直接検索系（例：「${store.name}ってどんな会社？」）
-- カテゴリ探索系（例：「${industryLabel}のGEO対策会社を探している」）
-- 採用・信頼系（例：「${store.name}の評判は？」）
+ユーザーの購買フローを想定してプロンプトを設計すること：
+- 「◯◯するにはどうすればいい？」→ 解決策・方法の調査
+- 「◯◯でおすすめのサービス・会社は？」→ 比較・選定
+- 「◯◯の費用・料金はいくら？」→ 予算感の確認
+- 「◯◯のメリット・デメリットは？」→ 深掘り比較
+- 「◯◯で実績のある会社を教えて」→ 信頼性の確認
 
-**ブランド毀損モニタリング用プロンプト**
-- ネガティブ意図系（例：「${store.name} 悪評・問題」）
-- リスク検索系（例：「${store.name} やばい・怪しい」）
+### ② ブランド毀損モニタリング（reputation カテゴリ）
+すでにブランド名を知っているユーザーが検索するプロンプト。
+ネガティブな回答が出ていないか監視するために使う。
 
-各プロンプトについて以下の情報をJSONで返してください：
+- 「${brandName}の評判・口コミは？」
+- 「${brandName}は信頼できる？」
+- 「${brandName}のデメリット・問題点は？」
+- 「${brandName}は怪しい？やばい？」
+
+## 品質基準
+- 実際のユーザーが入力しそうな自然な日本語で書くこと
+- 抽象的すぎず、具体的すぎない（検索意図が明確なもの）
+- awareness: 15〜20個、reputation: 5〜8個、合計20〜25個
+
+## 出力形式（JSONのみ・マークダウン不要）
 {
   "prompts": [
     {
-      "text": "プロンプトテキスト",
-      "category": "sales" | "awareness" | "reputation",
-      "difficulty": "low" | "med" | "high",
-      "priority": "high" | "medium" | "low",
-      "pseudoMemory": "このプロンプトを入力するユーザーの状況・背景・意図の説明（BtoBの意思決定者・担当者目線で）"
+      "text": "プロンプトテキスト（自然な日本語）",
+      "category": "awareness" | "reputation",
+      "pseudoMemory": "このプロンプトを入力するユーザーの状況・購買フェーズ・意図の説明（1〜2文）"
     }
   ]
-}
+}`
 
-difficulty（難易度）の基準：
-- low: 競合が少ない、特定性が高いプロンプト
-- med: 中程度の競合、最適化が必要
-- high: 競合が多い、汎用的なプロンプト
+    const userPrompt = `以下の企業のGEO計測用プロンプトを生成してください。
 
-priority（優先度）の基準：
-- high: 商談・問い合わせ直結、今すぐ取り組むべき
-- medium: ブランド認知向上に重要だが緊急ではない
-- low: 長期的なブランド毀損防止・モニタリング
-
-JSONのみを返してください。マークダウンのコードブロックは不要です。`
-
-    const userPrompt = `以下の企業情報をもとにGEO対策用プロンプトを生成してください：
-
-企業名: ${store.name}
-業種: ${industryLabel}
+企業名: ${store.name}${brandName !== store.name ? `\nブランド名: ${brandName}` : ''}
+業種・カテゴリ: ${industryLabel}
 事業概要: ${store.description}
 ターゲット顧客: ${store.targetAudience}
-強み・差別化: ${store.strengths}
+強み・差別化ポイント: ${store.strengths}
 提供サービス・プロダクト: ${store.services}
 実績・数字: ${store.achievements}
 市場ポジショニング: ${store.positioning}
-競合企業: ${store.competitors.map((c) => c.name).join('、')}
-${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}`
+競合企業: ${store.competitors.map((c) => c.name).join('、') || '不明'}
+${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}
+
+【重要】
+- awareness カテゴリは「${store.targetAudience}」が課題解決・サービス選定する際に実際に入力する質問を想定すること
+- ${brandName}が推薦・言及されるポテンシャルがある質問を選ぶこと
+- 企業名を直接含むプロンプトは reputation カテゴリのみにすること（awareness は企業名なしの一般質問）`
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -117,7 +120,7 @@ ${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}`
     const data = await response.json()
     const content = data.content[0]?.text || ''
 
-    let parsed: { prompts: Omit<Prompt, 'id' | 'isWinning' | 'createdAt' | 'updatedAt'>[] }
+    let parsed: { prompts: { text: string; category: string; pseudoMemory: string }[] }
     try {
       parsed = JSON.parse(content)
     } catch {
@@ -133,9 +136,9 @@ ${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}`
     const prompts: Prompt[] = parsed.prompts.map((p) => ({
       id: generateId(),
       text: p.text,
-      category: p.category as PromptCategory,
-      difficulty: p.difficulty as PromptDifficulty,
-      priority: p.priority as PromptPriority,
+      category: (p.category as PromptCategory) || 'awareness',
+      difficulty: 'med',  // 廃止予定、デフォルト値のみ
+      priority: 'medium', // 廃止予定、デフォルト値のみ
       isWinning: false,
       pseudoMemory: p.pseudoMemory,
       createdAt: now,
