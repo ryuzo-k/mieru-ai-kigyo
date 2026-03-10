@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { CompetitorBlogReport as CompetitorBlogReportType } from '@/app/api/analyze-competitor-blogs/route'
 import {
   Loader2,
   Copy,
@@ -432,7 +433,7 @@ export default function ContentPage() {
 
   // Competitor analysis state
   const [competitorAnalyzing, setCompetitorAnalyzing] = useState(false)
-  const [competitorReport, setCompetitorReport] = useState<import('@/app/api/analyze-competitor-blogs/route').CompetitorBlogReport | null>(null)
+  const [competitorReport, setCompetitorReport] = useState<CompetitorBlogReportType | null>(null)
   const [competitorError, setCompetitorError] = useState<string | null>(null)
 
   // Inline editing state

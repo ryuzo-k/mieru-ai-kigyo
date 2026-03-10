@@ -236,28 +236,28 @@ export async function POST(request: NextRequest) {
       switch (platform) {
         case 'claude':
           if (!anthropicKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], competitorMentions: {}, measuredAt: now })
+            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
             continue
           }
           responseData = await measureWithClaude(promptText, anthropicKey)
           break
         case 'chatgpt':
           if (!openaiKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], competitorMentions: {}, measuredAt: now })
+            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
             continue
           }
           responseData = await measureWithOpenAI(promptText, openaiKey)
           break
         case 'gemini':
           if (!geminiKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], competitorMentions: {}, measuredAt: now })
+            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
             continue
           }
           responseData = await measureWithGemini(promptText, geminiKey)
           break
         case 'perplexity':
           if (!perplexityKey) {
-            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], competitorMentions: {}, measuredAt: now })
+            results.push({ id: generateId(), promptId, platform, response: 'APIキー未設定', mentioned: false, mentionPosition: null, sentiment: 'neutral', positiveElements: '', negativeElements: '', citedUrls: [], citedContext: '', citedCompetitors: [], competitorMentions: {}, measuredAt: now })
             continue
           }
           responseData = await measureWithPerplexity(promptText, perplexityKey)
