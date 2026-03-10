@@ -22,7 +22,7 @@ const mediumInstructions: Record<ContentMedium, string> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const { store, prompts, medium, requirements, clientApiKey }: { store: StoreInfo; prompts: Prompt[]; medium: ContentMedium; requirements?: string[]; clientApiKey?: string } =
+    const { store, prompts, medium, requirements, suggestedTitle, angle, clientApiKey }: { store: StoreInfo; prompts: Prompt[]; medium: ContentMedium; requirements?: string[]; suggestedTitle?: string; angle?: string; clientApiKey?: string } =
       await request.json()
 
     if (!store) {
@@ -56,7 +56,8 @@ export async function POST(request: NextRequest) {
 4. BtoB・企業向けのトーンで、専門性と信頼性を前面に出す
 5. 日本語で自然で読みやすい文章にする`
 
-    const userPrompt = `以下の情報をもとに${mediumLabel}用のコンテンツを生成してください：
+    const userPrompt = `以下の情報をもとに${mediumLabel}用のコンテンツを生成してください。
+${suggestedTitle ? `提案タイトル: ${suggestedTitle}\n` : ""}${angle ? `記事の切り口・アングル: ${angle}\n` : ""}その他の情報：
 
 【企業情報】
 企業名: ${store.name}
