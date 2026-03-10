@@ -381,13 +381,19 @@ export default function ContentPage() {
                       </div>
 
                       {/* Covered prompts */}
-                      <div className="flex flex-wrap gap-1">
-                        {s.coveredPromptTexts.slice(0, 3).map((t, i) => (
-                          <span key={i} className="text-xs bg-muted rounded px-2 py-0.5 line-clamp-1 max-w-[180px]">{t}</span>
-                        ))}
-                        {s.coveredPromptTexts.length > 3 && (
-                          <span className="text-xs text-muted-foreground">+{s.coveredPromptTexts.length - 3}件</span>
-                        )}
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground">対象プロンプト（このコンテンツで表示率を上げる）</p>
+                        <div className="flex flex-col gap-1">
+                          {s.coveredPromptTexts.slice(0, 3).map((t, i) => (
+                            <div key={i} className="flex items-start gap-1.5">
+                              <span className="text-xs text-primary shrink-0 mt-0.5">▶</span>
+                              <span className="text-xs text-foreground/80 leading-relaxed">{t}</span>
+                            </div>
+                          ))}
+                          {s.coveredPromptTexts.length > 3 && (
+                            <span className="text-xs text-muted-foreground pl-4">+{s.coveredPromptTexts.length - 3}件</span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Key requirements */}
