@@ -14,7 +14,7 @@ const STEPS = ['基本情報', 'ブランド詳細', 'プロンプト生成']
 
 const defaultStoreInfo: StoreInfo = {
   id: '',
-  businessType: 'food',
+  businessType: 'other',
   name: '',
   websiteUrl: '',
   listingUrls: [],
@@ -74,8 +74,8 @@ export function SetupWizard() {
             <Zap className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">MiEL for Stores</h1>
-            <p className="text-sm text-muted-foreground">初期設定ウィザード</p>
+            <h1 className="text-xl font-bold">MiEL for Kigyo</h1>
+            <p className="text-sm text-muted-foreground">企業向け初期設定ウィザード</p>
           </div>
         </div>
 

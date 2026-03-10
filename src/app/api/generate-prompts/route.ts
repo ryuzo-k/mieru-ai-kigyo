@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { StoreInfo, Prompt, PromptCategory, PromptDifficulty, PromptPriority } from '@/types'
 
-const businessTypeLabel: Record<string, string> = {
-  food: '飲食',
-  beauty: '美容',
-  medical: '医療',
-  retail: '小売',
-  other: 'その他',
+const industryTypeLabel: Record<string, string> = {
+  food: '小売・EC',
+  beauty: 'コンサルティング・専門サービス',
+  medical: '医療・ヘルスケア',
+  retail: '製造・メーカー',
+  other: 'IT・SaaS',
 }
 
 function generateId(): string {
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     if (!store) {
       return NextResponse.json(
-        { error: '店舗情報が必要です' },
+        { error: '企業情報が必要です' },
         { status: 400 }
       )
     }
@@ -32,24 +32,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const businessLabel = businessTypeLabel[store.businessType] || store.businessType
+    const industryLabel = industryTypeLabel[store.businessType] || store.businessType
 
     const systemPrompt = `あなたはGEO（Generative Engine Optimization）対策の専門家です。
-店舗オーナーが提供する情報をもとに、AIチャットボット（Claude、ChatGPT、Gemini等）での検索・回答で店舗が上位表示されるための「勝ち筋プロンプト」を網羅的に生成してください。
+企業が提供する情報をもとに、AIチャットボット（Claude、ChatGPT、Gemini等）での検索・回答で当該企業が上位表示・推薦されるための「勝ち筋プロンプト」を網羅的に生成してください。
 
 以下のカテゴリで合計15〜20個のプロンプトを生成してください：
 
-**売上に関するプロンプト（来店・予約・選択）**
-- おすすめ・推薦系（例：「○○エリアで${businessLabel}おすすめ」）
-- 比較検討系（例：「○○の${businessLabel}でコスパがいいのは」）
+**売上に関するプロンプト（商談・問い合わせ・選定）**
+- 推薦・比較系（例：「${industryLabel}業界のGEO対策でおすすめのサービスは？」）
+- 課題解決系（例：「AIに自社を認識してもらうにはどうすればいい？」）
+- 競合比較系（例：「GEO対策ツールを比較したい」）
 
 **ブランド認知に関するプロンプト**
-- ブランド直接検索系（例：「${store.name}ってどんなお店？」）
-- カテゴリ探索系（例：「${businessLabel}を探してる」）
+- 直接検索系（例：「${store.name}ってどんな会社？」）
+- カテゴリ探索系（例：「${industryLabel}のGEO対策会社を探している」）
+- 採用・信頼系（例：「${store.name}の評判は？」）
 
-**ブランド毀損に関するプロンプト（ネガティブ検索のモニタリング）**
-- ネガティブ意図系（例：「${store.name}の悪い口コミ」）
-- リスク検索系（例：「${store.name} やばい」）
+**ブランド毀損モニタリング用プロンプト**
+- ネガティブ意図系（例：「${store.name} 悪評・問題」）
+- リスク検索系（例：「${store.name} やばい・怪しい」）
 
 各プロンプトについて以下の情報をJSONで返してください：
 {
@@ -59,34 +61,34 @@ export async function POST(request: NextRequest) {
       "category": "sales" | "awareness" | "reputation",
       "difficulty": "low" | "med" | "high",
       "priority": "high" | "medium" | "low",
-      "pseudoMemory": "このプロンプトを入力するユーザーの状況・背景・意図の説明"
+      "pseudoMemory": "このプロンプトを入力するユーザーの状況・背景・意図の説明（BtoBの意思決定者・担当者目線で）"
     }
   ]
 }
 
 difficulty（難易度）の基準：
-- low: 一般的な検索、競合が少ない
+- low: 競合が少ない、特定性が高いプロンプト
 - med: 中程度の競合、最適化が必要
-- high: 競合が多い、難しいキーワード
+- high: 競合が多い、汎用的なプロンプト
 
 priority（優先度）の基準：
-- high: 売上直結、今すぐ取り組むべき
-- medium: 重要だが緊急ではない
-- low: 長期的に対処すべき
+- high: 商談・問い合わせ直結、今すぐ取り組むべき
+- medium: ブランド認知向上に重要だが緊急ではない
+- low: 長期的なブランド毀損防止・モニタリング
 
 JSONのみを返してください。マークダウンのコードブロックは不要です。`
 
-    const userPrompt = `以下の店舗情報をもとにプロンプトを生成してください：
+    const userPrompt = `以下の企業情報をもとにGEO対策用プロンプトを生成してください：
 
-店舗名: ${store.name}
-業態: ${businessLabel}
-説明: ${store.description}
-ターゲット層: ${store.targetAudience}
+企業名: ${store.name}
+業種: ${industryLabel}
+事業概要: ${store.description}
+ターゲット顧客: ${store.targetAudience}
 強み・差別化: ${store.strengths}
-提供サービス・メニュー: ${store.services}
+提供サービス・プロダクト: ${store.services}
 実績・数字: ${store.achievements}
-ポジショニング: ${store.positioning}
-競合他社: ${store.competitors.map((c) => c.name).join('、')}
+市場ポジショニング: ${store.positioning}
+競合企業: ${store.competitors.map((c) => c.name).join('、')}
 ${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}`
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {

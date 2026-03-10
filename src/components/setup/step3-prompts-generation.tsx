@@ -180,7 +180,7 @@ export function Step3PromptsGeneration({ storeInfo, onComplete, onBack }: Props)
             <div>
               <p className="font-medium">プロンプトを生成中...</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Claude AIが{storeInfo.name}のGEO対策プロンプトを分析しています
+                Claude AIが{storeInfo.name}の企業GEO対策プロンプトを分析しています
               </p>
             </div>
           </div>
@@ -194,7 +194,7 @@ export function Step3PromptsGeneration({ storeInfo, onComplete, onBack }: Props)
       <CardHeader>
         <CardTitle>プロンプト生成・計測</CardTitle>
         <CardDescription>
-          入力情報をもとにAIがプロンプトを自動生成し、全件の表示率を計測します。上位{WINNING_TOP_N}件が自動的に勝ち筋プロンプトに設定されます。
+          入力した企業情報をもとにAIがGEO対策プロンプトを自動生成し、全件の表示率を計測します。上位{WINNING_TOP_N}件が自動的に勝ち筋プロンプトに設定されます。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
