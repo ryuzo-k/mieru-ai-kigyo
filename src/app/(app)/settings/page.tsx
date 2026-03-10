@@ -429,12 +429,12 @@ export default function SettingsPage() {
       {store && (
         <Card>
           <CardHeader>
-            <CardTitle>店舗情報の編集</CardTitle>
+            <CardTitle>企業情報の編集</CardTitle>
             <CardDescription>初期設定で入力した情報を修正できます</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>業態</Label>
+              <Label>業種</Label>
               <Select
                 value={(editStore as StoreInfo).businessType || store.businessType}
                 onValueChange={(v) =>
@@ -455,7 +455,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>店舗名</Label>
+              <Label>企業名</Label>
               <Input
                 value={(editStore as StoreInfo).name || store.name}
                 onChange={(e) =>
@@ -505,7 +505,7 @@ export default function SettingsPage() {
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  店舗情報を保存
+                  企業情報を保存
                 </>
               )}
             </Button>
@@ -538,7 +538,7 @@ export default function SettingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>データをリセットしますか？</AlertDialogTitle>
             <AlertDialogDescription>
-              すべての店舗情報・プロンプト・計測結果・APIキーが削除されます。
+              すべての企業情報・プロンプト・計測結果・APIキーが削除されます。
               この操作は元に戻せません。
             </AlertDialogDescription>
           </AlertDialogHeader>

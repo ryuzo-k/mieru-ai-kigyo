@@ -355,7 +355,7 @@ export default function AnalyticsPage() {
     setChatLoading(true)
 
     const systemContext = `あなたはGEO（生成エンジン最適化）対策の専門アナリストです。
-店舗「${store?.name ?? ''}」の計測データを分析してアドバイスを提供してください。
+企業「${store?.name ?? ''}」の計測データを分析してアドバイスを提供してください。
 
 【計測データサマリー】
 総計測件数: ${totalMeasured}

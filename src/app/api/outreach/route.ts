@@ -40,13 +40,13 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 2000,
-          system: `あなたはGEO対策・被リンク獲得戦略の専門家です。店舗の業態・エリア・競合情報をもとに、掲載依頼・相互リンク・PRなど多様なアウトリーチ先を提案してください。`,
+          system: `あなたはGEO対策・被リンク獲得戦略の専門家です。企業の業種・エリア・競合情報をもとに、メディア掲載・相互リンク・PRなどBtoB向けアウトリーチ先を提案してください。`,
           messages: [
             {
               role: 'user',
-              content: `以下の店舗情報をもとに、被リンク獲得のためのアウトリーチ先を10件提案してください。
+              content: `以下の企業情報をもとに、被リンク獲得のためのアウトリーチ先を10件提案してください。
 
-店舗名: ${store.name}
+企業名: ${store.name}
 業態: ${store.businessType}
 競合: ${competitorNames}
 強み: ${store.strengths}
@@ -147,15 +147,15 @@ JSONのみを返してください。`,
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
           max_tokens: 1000,
-          system: `あなたは店舗のマーケティング担当者として、被リンク獲得のためのアウトリーチメールを作成します。
+          system: `あなたは企業のマーケティング担当者として、被リンク獲得のためのアウトリーチメールを作成します。
 丁寧で具体的なメールを作成してください。`,
           messages: [
             {
               role: 'user',
               content: `以下の情報をもとに${emailTypeInstruction}${focusPageInstruction}
 
-【送信者情報（店舗）】
-店舗名: ${store.name}
+【送信者情報（企業）】
+企業名: ${store.name}
 業態: ${store.businessType}
 説明: ${store.description}
 強み: ${store.strengths}

@@ -52,7 +52,7 @@ const navItems = [
     icon: Globe,
   },
   {
-    title: '掲載・営業支援',
+    title: 'メディア・PRアウトリーチ',
     href: '/outreach',
     icon: Mail,
   },
@@ -69,8 +69,8 @@ export function AppSidebar() {
             <Zap className="h-4 w-4 text-primary-foreground" />
           </div>
           <div>
-            <p className="text-sm font-semibold">MiEL for Stores</p>
-            <p className="text-xs text-muted-foreground">GEO対策ツール</p>
+            <p className="text-sm font-semibold">MiEL for Kigyo</p>
+            <p className="text-xs text-muted-foreground">企業向けGEO対策ツール</p>
           </div>
         </div>
       </SidebarHeader>

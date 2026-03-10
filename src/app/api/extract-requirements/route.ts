@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
         system: `あなたはGEO（Generative Engine Optimization）対策の専門家です。
-プロンプトと店舗情報をもとに、AIチャットボットがこれらのプロンプトで回答する際の重要な要件を抽出してください。
+プロンプトと企業情報をもとに、AIチャットボットがこれらのプロンプトで回答する際の重要な要件を抽出してください。
 
 以下のJSONで返してください：
 {
@@ -43,8 +43,8 @@ JSONのみを返してください。`,
         messages: [
           {
             role: 'user',
-            content: `店舗情報：
-店舗名: ${store.name}
+            content: `企業情報：
+企業名: ${store.name}
 業態: ${store.businessType}
 説明: ${store.description}
 強み: ${store.strengths}

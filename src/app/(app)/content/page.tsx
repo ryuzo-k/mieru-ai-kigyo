@@ -464,7 +464,7 @@ export default function ContentPage() {
 
   const handleGenerate = async (medium: ContentMedium) => {
     if (!store) {
-      alert('店舗情報が設定されていません。先にセットアップを完了してください。')
+      alert('企業情報が設定されていません。先に初期設定を完了してください。')
       return
     }
     if (!apiKeys.anthropic) {

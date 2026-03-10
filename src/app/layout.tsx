@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'MiEL for Stores - GEO対策ツール',
+  title: 'MiEL for Kigyo - 企業向けGEO対策ツール',
   description: '実店舗向けGenerative Engine Optimization対策ツール',
 }
 

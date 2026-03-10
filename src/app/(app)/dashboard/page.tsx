@@ -144,7 +144,7 @@ export default function DashboardPage() {
           {store ? `${store.name}` : 'ダッシュボード'}
         </h1>
         <p className="text-muted-foreground">
-          {store ? 'GEO対策の現状を確認できます' : '店舗のGEO状況'}
+          {store ? 'GEO対策の現状を確認できます' : '企業のGEO状況'}
         </p>
       </div>
 

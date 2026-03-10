@@ -258,7 +258,7 @@ export default function OutreachPage() {
     const store = getStoreInfo()
     if (!store) {
       setError(
-        '店舗情報が設定されていません。設定ページから店舗情報を入力してください。'
+        '企業情報が設定されていません。設定ページから企業情報を入力してください。'
       )
       return
     }

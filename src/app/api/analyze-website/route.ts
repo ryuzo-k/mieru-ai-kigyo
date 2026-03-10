@@ -49,7 +49,7 @@ JSONのみを返してください。優先度順（high→low）で返してく
     const userPrompt = `以下のウェブサイトを分析してください：
 
 URL: ${url}
-店舗名: ${storeName}
+企業名: ${storeName}
 
 ウェブサイトコンテンツ（スクレイピング結果）:
 ${scrapedContent ? scrapedContent.substring(0, 3000) : 'コンテンツを取得できませんでした'}
