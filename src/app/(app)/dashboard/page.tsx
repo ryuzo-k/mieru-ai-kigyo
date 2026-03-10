@@ -14,7 +14,9 @@ import {
   ExternalLink,
   CheckCircle2,
   XCircle,
+  Flame,
 } from 'lucide-react'
+import { getRisingPrompts, type PromptTrend } from '@/lib/db'
 import {
   Card,
   CardContent,
@@ -49,6 +51,7 @@ export default function DashboardPage() {
   const [sessions, setSessions] = useState<MeasurementSession[]>([])
   const [wpConnected, setWpConnected] = useState(false)
   const [wpSiteUrl, setWpSiteUrl] = useState('')
+  const [risingPrompts, setRisingPrompts] = useState<PromptTrend[]>([])
 
   useEffect(() => {
     setStore(getStoreInfo())
@@ -57,6 +60,8 @@ export default function DashboardPage() {
     const wpConfig = getWordPressConfig()
     setWpConnected(wpConfig.connected)
     setWpSiteUrl(wpConfig.siteUrl)
+    // Supabaseから急上昇プロンプトを取得
+    getRisingPrompts(10).then(setRisingPrompts).catch(() => {})
   }, [])
 
   // Compute stats
@@ -314,6 +319,49 @@ export default function DashboardPage() {
           ))}
         </div>
       </div>
+
+      {/* 🔥 急上昇中プロンプト */}
+      {risingPrompts.length > 0 && (
+        <Card className="border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+            <div className="flex items-center gap-2">
+              <Flame className="h-5 w-5 text-orange-500" />
+              <div>
+                <CardTitle className="text-orange-700">急上昇中のプロンプト 🔥</CardTitle>
+                <CardDescription className="text-orange-600 text-xs mt-0.5">
+                  直近の計測で表示率が急上昇中。今すぐコンテンツを作るチャンスです
+                </CardDescription>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" asChild className="border-orange-300 text-orange-700 hover:bg-orange-100">
+              <Link href="/prompts">プロンプト管理</Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {risingPrompts.map((p) => (
+              <div key={p.promptId} className="flex items-center gap-3 rounded-lg border border-orange-200 bg-white px-3 py-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium line-clamp-1">{p.promptText}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-xs text-muted-foreground">
+                      前回 {Math.round(p.prevRate)}% → 直近 {Math.round(p.recentRate)}%
+                    </span>
+                    <Badge className="text-xs bg-orange-100 text-orange-700 border-orange-200">
+                      +{Math.round(p.trendDelta)}% 上昇
+                    </Badge>
+                  </div>
+                </div>
+                <Button size="sm" asChild className="shrink-0 bg-orange-500 hover:bg-orange-600 text-white gap-1">
+                  <Link href="/content">
+                    <Zap className="h-3.5 w-3.5" />
+                    コンテンツを作る
+                  </Link>
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent prompts */}
       {prompts.length > 0 && (

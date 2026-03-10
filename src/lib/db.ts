@@ -230,3 +230,35 @@ export async function updateLastRunAt(): Promise<void> {
     updated_at: new Date().toISOString(),
   })
 }
+
+// ── Prompt Trends ──────────────────────────────────────────────────────────
+
+export interface PromptTrend {
+  promptId: string
+  promptText: string
+  isWinning: boolean
+  displayRate: number
+  recentRate: number
+  prevRate: number
+  trendDelta: number // positive = rising
+}
+
+export async function getRisingPrompts(minDelta = 10): Promise<PromptTrend[]> {
+  const { data, error } = await getClient()
+    .from('prompt_trends')
+    .select('*')
+    .gte('trend_delta', minDelta)
+    .eq('is_winning', false) // 勝ち筋じゃないものの中で上昇中
+    .order('trend_delta', { ascending: false })
+    .limit(5)
+  if (error || !data) return []
+  return data.map((d) => ({
+    promptId: d.prompt_id,
+    promptText: d.prompt_text,
+    isWinning: d.is_winning,
+    displayRate: d.display_rate ?? 0,
+    recentRate: d.recent_rate ?? 0,
+    prevRate: d.prev_rate ?? 0,
+    trendDelta: d.trend_delta ?? 0,
+  }))
+}
