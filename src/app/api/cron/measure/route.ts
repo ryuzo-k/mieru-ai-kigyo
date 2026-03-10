@@ -30,7 +30,7 @@ async function measureWithClaude(prompt: string, apiKey: string): Promise<string
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -74,7 +74,7 @@ async function analyzeResponse(
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 600,
+        max_tokens: 8000,
         messages: [{
           role: 'user',
           content: `企業名「${companyName}」についてのAI回答を分析してください。\n\n回答:\n${response.substring(0, 1500)}\n\n以下のJSONのみ返してください：\n{"sentiment":"positive"|"neutral"|"negative","positiveElements":"","negativeElements":"","citedContext":"どういう文脈で言及されたか（なければ空）"}`

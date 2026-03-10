@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        max_tokens: 8000,
         system: systemContext,
         messages,
       }),

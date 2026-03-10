@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
+        max_tokens: 8000,
         system: `You are a GEO (Generative Engine Optimization) expert. Extract the key requirements that AI chatbots need when answering each prompt about the given company.
 
 IMPORTANT: Return ONLY raw JSON. No markdown, no code blocks, no explanation text. The response must be parseable by JSON.parse() directly.

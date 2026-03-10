@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 2000,
+          max_tokens: 8000,
           system: `あなたはGEO対策・被リンク獲得戦略の専門家です。企業の業種・エリア・競合情報をもとに、メディア掲載・相互リンク・PRなどBtoB向けアウトリーチ先を提案してください。`,
           messages: [
             {
@@ -146,7 +146,7 @@ JSONのみを返してください。`,
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
+          max_tokens: 8000,
           system: `あなたは企業のマーケティング担当者として、被リンク獲得のためのアウトリーチメールを作成します。
 丁寧で具体的なメールを作成してください。`,
           messages: [

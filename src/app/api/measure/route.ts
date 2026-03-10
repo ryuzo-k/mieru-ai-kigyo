@@ -23,7 +23,7 @@ async function measureWithClaude(
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
+        max_tokens: 8000,
         tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
         system: '必ず日本語で回答してください。質問でおすすめの会社・サービスを聞かれている場合は、具体的な会社名・サービス名を必ず複数列挙してください。抽象的な説明だけで終わらないこと。',
         messages: [{ role: 'system', content: '必ず日本語で回答してください。質問でおすすめの会社・サービスを聞かれている場合は、具体的な会社名・サービス名を必ず複数列挙してください。抽象的な説明だけで終わらないこと。' }, { role: 'user', content: prompt }],
@@ -40,7 +40,7 @@ async function measureWithClaude(
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 4000,
+          max_tokens: 8000,
           messages: [{ role: 'user', content: prompt }],
         }),
       })
@@ -85,7 +85,7 @@ async function measureWithOpenAI(
       },
       body: JSON.stringify({
         model: 'gpt-4o-search-preview',
-        max_tokens: 4000,
+        max_tokens: 8000,
         web_search_options: {},
         messages: [{ role: 'system', content: '必ず日本語で回答してください。質問でおすすめの会社・サービスを聞かれている場合は、具体的な会社名・サービス名を必ず複数列挙してください。抽象的な説明だけで終わらないこと。' }, { role: 'user', content: prompt }],
       }),
@@ -100,7 +100,7 @@ async function measureWithOpenAI(
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          max_tokens: 4000,
+          max_tokens: 8000,
           messages: [{ role: 'user', content: prompt }],
         }),
       })
@@ -176,7 +176,7 @@ async function measureWithPerplexity(
       },
       body: JSON.stringify({
         model: 'sonar',
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: 'user', content: prompt }],
       }),
     })
@@ -243,7 +243,7 @@ async function analyzeSentiment(
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
+        max_tokens: 8000,
         messages: [
           {
             role: 'user',
