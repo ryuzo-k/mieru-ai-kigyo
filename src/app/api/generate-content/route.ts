@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { StoreInfo, Prompt, ContentMedium, GeneratedContent } from '@/types'
+import { StoreInfo, Prompt, ContentMedium } from '@/types'
 
-function generateId(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
-}
 
 const mediumLabels: Record<ContentMedium, string> = {
   owned_media_article: 'オウンドメディア記事',
@@ -25,7 +22,7 @@ const mediumInstructions: Record<ContentMedium, string> = {
 
 export async function POST(request: NextRequest) {
   try {
-    const { store, prompts, medium, apiKey: clientApiKey }: { store: StoreInfo; prompts: Prompt[]; medium: ContentMedium; apiKey?: string } =
+    const { store, prompts, medium, requirements, clientApiKey }: { store: StoreInfo; prompts: Prompt[]; medium: ContentMedium; requirements?: string[]; clientApiKey?: string } =
       await request.json()
 
     if (!store) {
@@ -74,6 +71,8 @@ export async function POST(request: NextRequest) {
 【勝ち筋プロンプト（AIでの検索想定）】
 ${targetPrompts.map((p, i) => `${i + 1}. ${p.text}${p.displayRate ? ` （表示率: ${p.displayRate}%）` : ''}`).join('\n')}
 
+${requirements && requirements.length > 0 ? "\n以下の重要要件を必ず満たしてください：\n" + requirements.map((r, i) => (i+1)+". "+r).join("\n") : ""}
+
 上記のプロンプトでAIに検索された際に、この企業が上位表示・引用されるような${mediumLabel}を作成してください。
 コンテンツのタイトルと本文を生成し、以下のJSON形式で返してください：
 {
@@ -120,18 +119,7 @@ JSONのみを返してください。`
       }
     }
 
-    const now = new Date().toISOString()
-    const generatedContent: GeneratedContent = {
-      id: generateId(),
-      medium,
-      title: parsed.title,
-      content: parsed.content,
-      promptIds: targetPrompts.map((p) => p.id),
-      generatedAt: now,
-      editedAt: null,
-    }
-
-    return NextResponse.json({ content: generatedContent })
+    return NextResponse.json({ title: parsed.title, content: parsed.content })
   } catch (error) {
     console.error('Generate content error:', error)
     return NextResponse.json(
