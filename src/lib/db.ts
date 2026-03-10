@@ -3,7 +3,7 @@
  * localStorageの代わりにSupabaseに保存・取得する
  */
 import { createClient } from '@supabase/supabase-js'
-import type { StoreInfo, Prompt, MeasurementResult, ApiKeys, MeasurementSchedule, WordPressConfig } from '@/types'
+import type { StoreInfo, Prompt, MeasurementResult, ApiKeys, MeasurementSchedule } from '@/types'
 
 function getClient() {
   return createClient(
