@@ -26,20 +26,17 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
-        system: `あなたはGEO（Generative Engine Optimization）対策の専門家です。
-プロンプトと企業情報をもとに、AIチャットボットがこれらのプロンプトで回答する際の重要な要件を抽出してください。
+        system: `You are a GEO (Generative Engine Optimization) expert. Extract the key requirements that AI chatbots need when answering each prompt about the given company.
 
-以下のJSONで返してください：
-{
-  "requirements": [
-    {
-      "promptId": "プロンプトID",
-      "requirements": ["要件1", "要件2", "要件3"]
-    }
-  ],
-  "sharedRequirements": ["複数のプロンプトで共通する重要要件"]
-}
-JSONのみを返してください。`,
+IMPORTANT: Return ONLY raw JSON. No markdown, no code blocks, no explanation text. The response must be parseable by JSON.parse() directly.
+
+JSON format:
+{"requirements":[{"promptId":"id","requirements":["req1","req2","req3"]}],"sharedRequirements":["shared req that covers multiple prompts"]}
+
+Rules:
+- requirements: max 3 per prompt, short strings only, no quotes or special chars inside strings
+- sharedRequirements: max 5, focus on what covers the most prompts
+- All strings must be valid JSON strings (escape special chars if needed)`,
         messages: [
           {
             role: 'user',
@@ -71,10 +68,29 @@ ${targetPrompts.map((p) => `ID: ${p.id}\nテキスト: ${p.text}\nカテゴリ: 
 
     let parsed
     try {
+      // Try direct parse first
       parsed = JSON.parse(content)
     } catch {
-      const match = content.match(/\{[\s\S]*\}/)
-      parsed = match ? JSON.parse(match[0]) : { requirements: [], sharedRequirements: [] }
+      // Strip markdown code blocks if present
+      const stripped = content
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```\s*$/, '')
+        .trim()
+      try {
+        parsed = JSON.parse(stripped)
+      } catch {
+        // Extract first {...} block
+        const match = stripped.match(/\{[\s\S]*\}/)
+        if (match) {
+          try {
+            parsed = JSON.parse(match[0])
+          } catch {
+            parsed = { requirements: [], sharedRequirements: [] }
+          }
+        } else {
+          parsed = { requirements: [], sharedRequirements: [] }
+        }
+      }
     }
 
     return NextResponse.json(parsed)
