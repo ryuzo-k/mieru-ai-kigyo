@@ -108,7 +108,7 @@ ${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}
       },
       body: JSON.stringify({
         model: 'claude-opus-4-6',
-        max_tokens: 4000,
+        max_tokens: 8000,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
       }),
