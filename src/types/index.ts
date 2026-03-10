@@ -1,5 +1,14 @@
-// 業態
+// 業態（企業向け）
 export type BusinessType = 'food' | 'beauty' | 'medical' | 'retail' | 'other'
+
+// ビジネスタイプのラベルマッピング（企業向け）
+export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
+  other: 'IT・SaaS',
+  retail: '製造・メーカー',
+  medical: '医療・ヘルスケア',
+  beauty: 'コンサルティング・専門サービス',
+  food: '小売・EC',
+}
 
 // プロンプトカテゴリ
 export type PromptCategory = 'sales' | 'awareness' | 'reputation'
@@ -17,20 +26,13 @@ export interface Competitor {
   url: string
 }
 
-// 掲載URL
-export interface ListingUrl {
-  id: string
-  platform: string
-  url: string
-}
-
-// 店舗情報
+// 企業情報（StoreInfoを企業向けに流用）
 export interface StoreInfo {
   id: string
   businessType: BusinessType
   name: string
   websiteUrl: string
-  listingUrls: ListingUrl[]
+  listingUrls: never[]  // 企業向けでは使用しない
   description: string
   targetAudience: string
   strengths: string
@@ -51,6 +53,10 @@ export interface Prompt {
   priority: PromptPriority
   isWinning: boolean
   pseudoMemory: string
+  displayRate?: number  // 表示率（0-100%）
+  citedSources?: string[]  // AIが引用したURL/情報源
+  citedCompetitors?: string[]  // 引用された競合名
+  citedContext?: string  // AIがどういう文脈で言及したか
   createdAt: string
   updatedAt: string
 }
@@ -73,6 +79,8 @@ export interface MeasurementResult {
   positiveElements: string
   negativeElements: string
   citedUrls: string[]
+  citedContext: string  // どういう文脈で言及されたか
+  citedCompetitors: string[]  // 同時に言及された競合
   competitorMentions: Record<string, boolean>
   measuredAt: string
 }
@@ -86,15 +94,14 @@ export interface MeasurementSession {
   results: MeasurementResult[]
 }
 
-// コンテンツ媒体タイプ
+// コンテンツ媒体タイプ（企業向け）
 export type ContentMedium =
-  | 'tabelog'
-  | 'gurunavi'
-  | 'retty'
-  | 'rakuten'
-  | 'hotpepper'
-  | 'google_business'
-  | 'owned_media'
+  | 'owned_media_article'  // オウンドメディア記事
+  | 'lp'                   // LP/サービスページ
+  | 'whitepaper'           // ホワイトペーパー
+  | 'press_release'        // プレスリリース
+  | 'case_study'           // 事例記事
+  | 'column'               // コラム/専門記事
 
 // 生成コンテンツ
 export interface GeneratedContent {
@@ -127,8 +134,8 @@ export interface WebsiteAnalysis {
 // アウトリーチステータス
 export type OutreachStatus = 'pending' | 'drafted' | 'sent' | 'confirmed'
 
-// アウトリーチ種別
-export type OutreachType = 'listing' | 'mutual_link' | 'pr'
+// アウトリーチ種別（企業向け）
+export type OutreachType = 'media_coverage' | 'mutual_link' | 'pr' | 'sponsored_content'
 
 // アウトリーチターゲット
 export interface OutreachTarget {
@@ -190,6 +197,26 @@ export interface ContentPattern {
   name: string
   pattern: string
   savedAt: string
+}
+
+// 競合ブログ分析結果
+export interface CompetitorBlogAnalysis {
+  competitorName: string
+  blogUrl: string
+  contentTypes: {
+    type: ContentPatternType
+    label: string
+    frequency: 'high' | 'medium' | 'low'
+    geoScore: number
+    avgWordCount: number
+    topicPatterns: string[]
+  }[]
+  recommendedStrategy: {
+    primaryType: string
+    reasoning: string
+    estimatedGeoImpact: 'high' | 'medium' | 'low'
+    suggestedTopics: string[]
+  }
 }
 
 // アプリ全体のストア

@@ -109,6 +109,7 @@ async function measureWithPerplexity(
 async function analyzeSentiment(
   response: string,
   storeName: string,
+  competitors: string[],
   apiKey: string
 ): Promise<{
   sentiment: Sentiment
@@ -116,6 +117,8 @@ async function analyzeSentiment(
   negativeElements: string
   mentionPosition: number | null
   citedUrls: string[]
+  citedContext: string
+  citedCompetitors: string[]
 }> {
   const lowerResponse = response.toLowerCase()
   const lowerName = storeName.toLowerCase()
@@ -125,6 +128,11 @@ async function analyzeSentiment(
   const urlRegex = /https?:\/\/[^\s\)\"\']+/g
   const citedUrls = response.match(urlRegex) || []
 
+  // 競合言及を検出
+  const citedCompetitors = competitors.filter(c =>
+    lowerResponse.includes(c.toLowerCase())
+  )
+
   if (!apiKey) {
     return {
       sentiment: 'neutral',
@@ -132,6 +140,8 @@ async function analyzeSentiment(
       negativeElements: '',
       mentionPosition,
       citedUrls,
+      citedContext: '',
+      citedCompetitors,
     }
   }
 
@@ -145,11 +155,11 @@ async function analyzeSentiment(
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
+        max_tokens: 800,
         messages: [
           {
             role: 'user',
-            content: `以下のAI回答を分析してください。店舗名「${storeName}」に関する記述を特定し、センチメントを判断してください。
+            content: `以下のAI回答を分析してください。企業名「${storeName}」に関する記述を分析し、GEO観点でのインサイトを抽出してください。
 
 回答:
 ${response.substring(0, 2000)}
@@ -157,8 +167,9 @@ ${response.substring(0, 2000)}
 以下のJSONのみを返してください：
 {
   "sentiment": "positive" | "neutral" | "negative",
-  "positiveElements": "ポジティブな要素の説明（ない場合は空文字）",
-  "negativeElements": "ネガティブな要素の説明（ない場合は空文字）"
+  "positiveElements": "ポジティブな要素（ない場合は空文字）",
+  "negativeElements": "ネガティブな要素（ない場合は空文字）",
+  "citedContext": "AIがこの企業をどういう文脈・カテゴリで言及したか（例：「DX支援の具体的な事例として」「コスト削減ソリューションの一つとして」など。言及なければ空文字）"
 }`,
           },
         ],
@@ -166,7 +177,7 @@ ${response.substring(0, 2000)}
     })
 
     if (!res.ok) {
-      return { sentiment: 'neutral', positiveElements: '', negativeElements: '', mentionPosition, citedUrls }
+      return { sentiment: 'neutral', positiveElements: '', negativeElements: '', mentionPosition, citedUrls, citedContext: '', citedCompetitors }
     }
 
     const data = await res.json()
@@ -185,9 +196,11 @@ ${response.substring(0, 2000)}
       negativeElements: parsed.negativeElements || '',
       mentionPosition,
       citedUrls,
+      citedContext: parsed.citedContext || '',
+      citedCompetitors,
     }
   } catch {
-    return { sentiment: 'neutral', positiveElements: '', negativeElements: '', mentionPosition, citedUrls }
+    return { sentiment: 'neutral', positiveElements: '', negativeElements: '', mentionPosition, citedUrls, citedContext: '', citedCompetitors }
   }
 }
 
@@ -265,13 +278,15 @@ export async function POST(request: NextRequest) {
           positiveElements: '',
           negativeElements: '',
           citedUrls: [],
+          citedContext: '',
+          citedCompetitors: [],
           competitorMentions: {},
           measuredAt: now,
         })
         continue
       }
 
-      const analysis = await analyzeSentiment(responseData.response, storeName, anthropicKey)
+      const analysis = await analyzeSentiment(responseData.response, storeName, competitors, anthropicKey)
 
       const lowerResponse = responseData.response.toLowerCase()
       const lowerName = storeName.toLowerCase()
@@ -293,6 +308,8 @@ export async function POST(request: NextRequest) {
         positiveElements: analysis.positiveElements,
         negativeElements: analysis.negativeElements,
         citedUrls: analysis.citedUrls,
+        citedContext: analysis.citedContext,
+        citedCompetitors: analysis.citedCompetitors,
         competitorMentions,
         measuredAt: now,
       })

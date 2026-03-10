@@ -90,7 +90,7 @@ const statusConfig: Record<
     icon: Send,
   },
   confirmed: {
-    label: '掲載確認済み',
+    label: '掲載・掲載確認済み',
     badgeClass: 'bg-green-100 text-green-700 border-green-200',
     icon: CheckCircle,
   },
@@ -100,8 +100,8 @@ const outreachTypeConfig: Record<
   OutreachType,
   { label: string; badgeClass: string }
 > = {
-  listing: {
-    label: '掲載依頼',
+  media_coverage: {
+    label: 'メディア掲載',
     badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
   },
   mutual_link: {
@@ -111,6 +111,10 @@ const outreachTypeConfig: Record<
   pr: {
     label: 'PR施策',
     badgeClass: 'bg-purple-100 text-purple-700 border-purple-200',
+  },
+  sponsored_content: {
+    label: 'スポンサードコンテンツ',
+    badgeClass: 'bg-orange-100 text-orange-700 border-orange-200',
   },
 }
 
@@ -164,7 +168,7 @@ function StatusBadge({ status }: { status: OutreachStatus }) {
 }
 
 function OutreachTypeBadge({ type }: { type: OutreachType }) {
-  const cfg = outreachTypeConfig[type] ?? outreachTypeConfig.listing
+  const cfg = outreachTypeConfig[type] ?? outreachTypeConfig.media_coverage
   return (
     <span
       className={cn(
@@ -298,7 +302,7 @@ export default function OutreachPage() {
           mediaName: target.mediaName,
           mediaUrl: target.mediaUrl,
           competitorInfo: target.competitorInfo,
-          outreachType: target.outreachType || 'listing',
+          outreachType: target.outreachType || 'media_coverage',
           targetRanking: target.targetRanking,
           focusPageUrl: target.focusPageUrl || focusPageUrl,
           focusPageKeyword: target.focusPageKeyword || focusPageKeyword,
@@ -408,7 +412,7 @@ export default function OutreachPage() {
 
   const filteredTargets = targets.filter((t) => {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false
-    if (filterType !== 'all' && (t.outreachType || 'listing') !== filterType) return false
+    if (filterType !== 'all' && (t.outreachType || 'media_coverage') !== filterType) return false
     return true
   })
 
@@ -427,9 +431,9 @@ export default function OutreachPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold">掲載・営業支援</h1>
+        <h1 className="text-2xl font-bold">メディア・PRアウトリーチ</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          競合が引用されているメディアを発掘し、掲載依頼メールを自動生成・送信します
+          競合企業が引用・掲載されているメディアを発掘し、アウトリーチメールを自動生成・送信します
         </p>
       </div>
 
@@ -543,7 +547,7 @@ export default function OutreachPage() {
         <CardHeader>
           <CardTitle>メディア候補を探す</CardTitle>
           <CardDescription>
-            AIが競合他社が掲載・引用されているメディアを自動リストアップします（掲載依頼・相互リンク・PR含む）
+            AIが競合企業が掲載・引用されているメディアを自動リストアップします（メディア掲載・相互リンク・PR・スポンサードコンテンツ）
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -579,7 +583,7 @@ export default function OutreachPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">すべての種別</SelectItem>
-                <SelectItem value="listing">掲載依頼</SelectItem>
+                <SelectItem value="media_coverage">メディア掲載</SelectItem>
                 <SelectItem value="mutual_link">相互リンク</SelectItem>
                 <SelectItem value="pr">PR施策</SelectItem>
               </SelectContent>
@@ -593,7 +597,7 @@ export default function OutreachPage() {
                 <SelectItem value="pending">未対応</SelectItem>
                 <SelectItem value="drafted">メール下書き済み</SelectItem>
                 <SelectItem value="sent">送信済み</SelectItem>
-                <SelectItem value="confirmed">掲載確認済み</SelectItem>
+                <SelectItem value="confirmed">掲載・掲載確認済み</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -659,7 +663,7 @@ export default function OutreachPage() {
 
                           {/* Outreach type */}
                           <TableCell>
-                            <OutreachTypeBadge type={target.outreachType || 'listing'} />
+                            <OutreachTypeBadge type={target.outreachType || 'media_coverage'} />
                           </TableCell>
 
                           {/* Target ranking */}
@@ -707,7 +711,7 @@ export default function OutreachPage() {
                                   </SelectItem>
                                   <SelectItem value="sent">送信済み</SelectItem>
                                   <SelectItem value="confirmed">
-                                    掲載確認済み
+                                    掲載・掲載確認済み
                                   </SelectItem>
                                 </SelectContent>
                               </Select>
@@ -912,7 +916,7 @@ export default function OutreachPage() {
                 <div className="flex items-center gap-2">
                   <Send className="h-4 w-4 text-orange-500 shrink-0" />
                   <span className="font-medium">{t.mediaName}</span>
-                  <OutreachTypeBadge type={t.outreachType || 'listing'} />
+                  <OutreachTypeBadge type={t.outreachType || 'media_coverage'} />
                   <span className="text-muted-foreground text-xs">
                     {t.contactEmail}
                   </span>

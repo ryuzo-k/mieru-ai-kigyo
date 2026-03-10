@@ -66,13 +66,12 @@ interface MediumConfig {
 }
 
 const ALL_MEDIUMS: MediumConfig[] = [
-  { id: 'google_business', label: 'Googleビジネスプロフィール', description: '店舗情報・説明文のGEO最適化テキスト', businessTypes: null },
-  { id: 'owned_media', label: 'オウンドメディア', description: 'GEO最適化された記事・ブログコンテンツ', businessTypes: null },
-  { id: 'tabelog', label: '食べログ', description: 'ブランド基礎情報＋特徴説明文', businessTypes: ['food'] },
-  { id: 'gurunavi', label: 'ぐるなび', description: 'ブランド基礎情報＋特徴説明文', businessTypes: ['food'] },
-  { id: 'retty', label: 'Retty', description: 'ブランド基礎情報＋特徴説明文', businessTypes: ['food'] },
-  { id: 'rakuten', label: '楽天', description: 'おすすめ情報リスト形式コンテンツ', businessTypes: ['food'] },
-  { id: 'hotpepper', label: 'ホットペッパービューティー', description: 'サービス詳細＋強み訴求コンテンツ', businessTypes: ['beauty'] },
+  { id: 'owned_media_article', label: 'オウンドメディア記事', description: 'GEO最適化されたブログ・技術記事コンテンツ', businessTypes: null },
+  { id: 'lp', label: 'LP/サービスページ', description: 'コンバージョン最適化されたランディングページ', businessTypes: null },
+  { id: 'whitepaper', label: 'ホワイトペーパー', description: '専門知識・ノウハウを体系化した資料コンテンツ', businessTypes: null },
+  { id: 'press_release', label: 'プレスリリース', description: 'PR TIMES等向けの発表文・ニュースリリース', businessTypes: null },
+  { id: 'case_study', label: '事例記事', description: '導入事例・成果事例のGEO最適化コンテンツ', businessTypes: null },
+  { id: 'column', label: 'コラム/専門記事', description: '業界知見・専門コラムのGEO最適化コンテンツ', businessTypes: null },
 ]
 
 // ── Pattern type config ────────────────────────────────────────────────────
@@ -428,7 +427,7 @@ export default function ContentPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [contents, setContents] = useState<GeneratedContent[]>([])
   const [generating, setGenerating] = useState<ContentMedium | null>(null)
-  const [activeMedium, setActiveMedium] = useState<ContentMedium>('google_business')
+  const [activeMedium, setActiveMedium] = useState<ContentMedium>('owned_media_article')
   const [activeMainTab, setActiveMainTab] = useState<'generate' | 'pattern' | 'competitor'>('generate')
 
   // Competitor analysis state
