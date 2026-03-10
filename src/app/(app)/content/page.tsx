@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   Loader2, Copy, Check, RefreshCw, FileText, Pencil, Save, X,
   ChevronRight, Sparkles, Megaphone, BookOpen, BarChart2,
-  CheckSquare, Zap, ArrowRight, AlertTriangle,
+  CheckSquare, Zap, ArrowRight, AlertTriangle, Calendar, Clock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +23,7 @@ import { useCompany } from '@/context/company-context'
 import { StoreInfo, Prompt, GeneratedContent } from '@/types'
 import type { ContentSuggestion } from '@/app/api/suggest-contents/route'
 import type { CompetitorBlogReport as CompetitorBlogReportType } from '@/app/api/analyze-competitor-blogs/route'
+import type { ContentScheduleItem } from '@/app/api/generate-schedule/route'
 
 // ── Icons per content type ─────────────────────────────────────────────────
 
@@ -43,6 +44,26 @@ const IMPACT_LABELS: Record<string, string> = {
   high: '効果大',
   medium: '効果中',
   low: '効果小',
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  owned_media_article: 'オウンドメディア記事',
+  press_release: 'プレスリリース',
+  case_study: '事例記事',
+  column: 'コラム',
+  misinformation_correction: '誤情報訂正記事',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  scheduled: '予定',
+  published: '公開済み',
+  cancelled: 'キャンセル',
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  scheduled: 'bg-blue-100 text-blue-700 border-blue-200',
+  published: 'bg-green-100 text-green-700 border-green-200',
+  cancelled: 'bg-slate-100 text-slate-500 border-slate-200',
 }
 
 // ── Competitor Analysis ────────────────────────────────────────────────────
@@ -149,6 +170,202 @@ function CompetitorAnalysisTab() {
               )}
             </CardContent>
           </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Schedule Tab ───────────────────────────────────────────────────────────
+
+function ScheduleTab({
+  companyId,
+  suggestions,
+}: {
+  companyId: string
+  suggestions: ContentSuggestion[]
+}) {
+  const [schedule, setSchedule] = useState<ContentScheduleItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const today = new Date().toISOString().split('T')[0]
+
+  useEffect(() => {
+    loadSchedule()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId])
+
+  const loadSchedule = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/generate-schedule?companyId=${encodeURIComponent(companyId)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSchedule(data.schedule || [])
+      }
+    } catch { /* ignore */ } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (suggestions.length === 0) {
+      setError('先に「コンテンツ提案・生成」タブでコンテンツを提案してください。')
+      return
+    }
+    setGenerating(true); setError(null)
+    try {
+      const res = await fetch('/api/generate-schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId,
+          contentSuggestions: suggestions,
+          startDate: new Date().toISOString(),
+        }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      const data = await res.json()
+      setSchedule(data.schedule || [])
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const todayItems = schedule.filter((s) => s.scheduledDate === today)
+
+  return (
+    <div className="space-y-4">
+      <Card className="bg-purple-50 border-purple-200">
+        <CardContent className="py-3 px-4 text-sm text-purple-800">
+          コンテンツ提案を1日1投稿のスケジュールに変換します。推奨公開時刻付きで管理できます。
+        </CardContent>
+      </Card>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={handleGenerate} disabled={generating || suggestions.length === 0} className="gap-2">
+          {generating
+            ? <><Loader2 className="h-4 w-4 animate-spin" />スケジュール生成中...</>
+            : <><Calendar className="h-4 w-4" />1日1投稿スケジュールを作成</>
+          }
+        </Button>
+        <Button variant="ghost" size="sm" onClick={loadSchedule} disabled={loading} className="gap-1 text-muted-foreground">
+          <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />更新
+        </Button>
+        {suggestions.length === 0 && (
+          <span className="text-xs text-muted-foreground">提案タブでコンテンツを提案後に利用可能</span>
+        )}
+      </div>
+
+      {error && (
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="py-3 px-4 text-sm text-red-700">{error}</CardContent>
+        </Card>
+      )}
+
+      {/* Today's post highlight */}
+      {todayItems.length > 0 && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-amber-800 flex items-center gap-2">
+              <Zap className="h-4 w-4" />今日の投稿
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {todayItems.map((item) => (
+              <div key={item.id} className="flex items-center gap-3">
+                <Clock className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                <span className="text-sm font-medium text-amber-900 flex-1">{item.suggestionTitle}</span>
+                <span className="text-xs text-amber-700">{item.publishTime}</span>
+                <Badge variant="outline" className="text-xs">
+                  {TYPE_LABELS[item.suggestionType] || item.suggestionType}
+                </Badge>
+                <Button variant="outline" size="sm" asChild className="text-xs gap-1">
+                  <Link href="/content#history"><ArrowRight className="h-3 w-3" />生成済みを確認</Link>
+                </Button>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Schedule table */}
+      {schedule.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-12">
+          スケジュールがありません。上のボタンで作成してください。
+        </p>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">{schedule.length}件のスケジュール</p>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-28">日付</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">タイトル</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-32">種別</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">公開時刻</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-20">状態</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {schedule.map((item) => {
+                  const isToday = item.scheduledDate === today
+                  const isPast = item.scheduledDate < today
+                  return (
+                    <tr
+                      key={item.id}
+                      className={cn(
+                        'hover:bg-muted/30 transition-colors',
+                        isToday && 'bg-amber-50/50',
+                        isPast && !isToday && 'opacity-60'
+                      )}
+                    >
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5">
+                          {isToday && <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" />}
+                          <span className={cn('text-xs font-mono', isToday && 'font-semibold text-amber-700')}>
+                            {item.scheduledDate}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <p className="text-xs font-medium line-clamp-1">{item.suggestionTitle}</p>
+                        {item.coveredPromptTexts.length > 0 && (
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            ▶ {item.coveredPromptTexts[0]}
+                            {item.coveredPromptTexts.length > 1 && ` 他${item.coveredPromptTexts.length - 1}件`}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="text-xs text-muted-foreground">
+                          {TYPE_LABELS[item.suggestionType] || item.suggestionType}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />{item.publishTime}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <Badge
+                          variant="outline"
+                          className={cn('text-xs', STATUS_COLORS[item.status] || '')}
+                        >
+                          {STATUS_LABELS[item.status] || item.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -296,6 +513,9 @@ export default function ContentPage() {
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
             <FileText className="h-4 w-4" />生成履歴
+          </TabsTrigger>
+          <TabsTrigger value="schedule" className="gap-1.5">
+            <Calendar className="h-4 w-4" />スケジュール
           </TabsTrigger>
         </TabsList>
 
@@ -487,7 +707,7 @@ export default function ContentPage() {
         </TabsContent>
 
         {/* ── History Tab ── */}
-        <TabsContent value="history" className="space-y-3 mt-4">
+        <TabsContent value="history" className="space-y-3 mt-4" id="history">
           {contents.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-12">
               まだコンテンツが生成されていません。「コンテンツ提案・生成」タブから作成してください。
@@ -512,6 +732,11 @@ export default function ContentPage() {
               </Card>
             ))
           )}
+        </TabsContent>
+
+        {/* ── Schedule Tab ── */}
+        <TabsContent value="schedule" className="mt-4">
+          <ScheduleTab companyId={companyId} suggestions={suggestions} />
         </TabsContent>
       </Tabs>
     </div>

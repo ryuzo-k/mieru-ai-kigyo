@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Platform, MeasurementResult, Sentiment } from '@/types'
 import { saveMeasurementResultToDB } from '@/lib/db'
+import { createClient } from '@supabase/supabase-js'
 
 function generateId(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
+  return crypto.randomUUID()
+}
+
+function getSupabaseClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 }
 
 // ── Claude (with web search tool) ─────────────────────────────────────────
@@ -26,7 +34,7 @@ async function measureWithClaude(
         max_tokens: 8000,
         tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3 }],
         system: '必ず日本語で回答してください。質問でおすすめの会社・サービスを聞かれている場合は、具体的な会社名・サービス名を必ず複数列挙してください。抽象的な説明だけで終わらないこと。',
-        messages: [{ role: 'system', content: '必ず日本語で回答してください。質問でおすすめの会社・サービスを聞かれている場合は、具体的な会社名・サービス名を必ず複数列挙してください。抽象的な説明だけで終わらないこと。' }, { role: 'user', content: prompt }],
+        messages: [{ role: 'user', content: prompt }],
       }),
     })
     if (!res.ok) {
@@ -191,6 +199,61 @@ async function measureWithPerplexity(
   }
 }
 
+// ── AI-powered direct competitor filtering ────────────────────────────────
+
+async function filterDirectCompetitors(
+  companies: string[],
+  storeName: string,
+  businessType: string,
+  services: string,
+  apiKey: string
+): Promise<string[]> {
+  if (companies.length === 0 || !apiKey) return companies
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: `以下の企業リストの中から、「${storeName}（業界: ${businessType}、サービス: ${services}）」の直接競合企業のみを選んでください。
+知名度が高いだけで業態が違う企業（例: 大手総合コンサル vs 専門SaaS企業）は除外してください。
+直接競合の定義: 同じ業界で、同じターゲット顧客に、同じ課題解決を提供している企業。
+
+企業リスト: ${companies.join(', ')}
+
+JSON配列のみで返してください（説明不要）: ["企業A", "企業B"]`,
+          },
+        ],
+      }),
+    })
+    if (!res.ok) return companies
+    const data = await res.json()
+    const text = data.content?.[0]?.text || '[]'
+    // Parse JSON array
+    let parsed: string[] = []
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      const match = text.match(/\[[\s\S]*\]/)
+      if (match) {
+        try { parsed = JSON.parse(match[0]) } catch { /* ignore */ }
+      }
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) return companies
+    return parsed.filter((c) => typeof c === 'string')
+  } catch {
+    return companies
+  }
+}
+
 // ── Sentiment + competitive analysis ──────────────────────────────────────
 
 async function analyzeSentiment(
@@ -198,7 +261,9 @@ async function analyzeSentiment(
   storeName: string,
   competitors: string[],
   apiKey: string,
-  apiCitations: string[] = []
+  apiCitations: string[] = [],
+  businessType: string = '',
+  services: string = ''
 ): Promise<{
   sentiment: Sentiment
   positiveElements: string
@@ -217,7 +282,8 @@ async function analyzeSentiment(
   const urlRegex = /https?:\/\/[^\s\)\"\'>\]]+/g
   const citedUrls = response.match(urlRegex) || []
 
-  const citedCompetitors = competitors.filter((c) =>
+  // Initial regex-based competitor detection
+  const rawCitedCompetitors = competitors.filter((c) =>
     lowerResponse.includes(c.toLowerCase())
   )
 
@@ -229,7 +295,7 @@ async function analyzeSentiment(
       mentionPosition,
       citedUrls,
       citedContext: '',
-      citedCompetitors,
+      citedCompetitors: rawCitedCompetitors,
     }
   }
 
@@ -279,7 +345,7 @@ Notes:
         mentionPosition,
         citedUrls,
         citedContext: '',
-        citedCompetitors,
+        citedCompetitors: rawCitedCompetitors,
       }
     }
 
@@ -318,6 +384,20 @@ Notes:
       }
     })
 
+    // AI-filter to only direct competitors
+    const allMentionedCompetitors = competitorRankings.map((c) => c.name)
+    const directCompetitors = await filterDirectCompetitors(
+      allMentionedCompetitors,
+      storeName,
+      businessType,
+      services,
+      apiKey
+    )
+    const directSet = new Set(directCompetitors.map((c) => c.toLowerCase()))
+    const filteredRankings = competitorRankings.filter((c) =>
+      directSet.has(c.name.toLowerCase())
+    )
+
     return {
       sentiment: ((parsed.sentiment as Sentiment) || 'neutral'),
       positiveElements: (parsed.positiveElements as string) || '',
@@ -325,8 +405,8 @@ Notes:
       mentionPosition,
       citedUrls: mergedUrls,
       citedContext: (parsed.citedContext as string) || '',
-      citedCompetitors: competitorRankings.map((c) => c.name),
-      competitorRankings,
+      citedCompetitors: filteredRankings.map((c) => c.name),
+      competitorRankings: filteredRankings,
     }
   } catch {
     return {
@@ -336,7 +416,7 @@ Notes:
       mentionPosition,
       citedUrls,
       citedContext: '',
-      citedCompetitors,
+      citedCompetitors: rawCitedCompetitors,
     }
   }
 }
@@ -369,6 +449,24 @@ export async function POST(request: NextRequest) {
     const openaiKey = clientApiKeys?.chatgpt || process.env.OPENAI_API_KEY || ''
     const geminiKey = clientApiKeys?.gemini || process.env.GOOGLE_GEMINI_API_KEY || ''
     const perplexityKey = clientApiKeys?.perplexity || process.env.PERPLEXITY_API_KEY || ''
+
+    // Fetch store info for AI competitor filtering
+    let businessType = ''
+    let services = ''
+    if (companyId && anthropicKey) {
+      try {
+        const supabase = getSupabaseClient()
+        const { data } = await supabase
+          .from('store_info')
+          .select('business_type, services')
+          .eq('id', companyId)
+          .single()
+        if (data) {
+          businessType = data.business_type || ''
+          services = data.services || ''
+        }
+      } catch { /* ignore */ }
+    }
 
     const MEASURE_TIMES = 3
     const results: MeasurementResult[] = []
@@ -476,7 +574,10 @@ export async function POST(request: NextRequest) {
         rawResponses[rawResponses.length - 1]
 
       const displayRate = Math.round((mentionCount / rawResponses.length) * 100)
-      const analysis = await analyzeSentiment(bestResponse, storeName, competitors, anthropicKey, apiCitations)
+      // All platforms use Claude for unified analysis
+      const analysis = await analyzeSentiment(
+        bestResponse, storeName, competitors, anthropicKey, apiCitations, businessType, services
+      )
 
       const competitorMentions: Record<string, boolean> = {}
       for (const competitor of competitors) {
