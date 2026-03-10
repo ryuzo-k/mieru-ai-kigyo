@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   Loader2, Copy, Check, RefreshCw, FileText, Pencil, Save, X,
   ChevronRight, Sparkles, Megaphone, BookOpen, BarChart2,
-  CheckSquare, Zap, ArrowRight,
+  CheckSquare, Zap, ArrowRight, AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,6 +30,7 @@ const TYPE_ICONS: Record<string, React.ElementType> = {
   press_release: Megaphone,
   case_study: CheckSquare,
   column: BookOpen,
+  misinformation_correction: AlertTriangle,
 }
 
 const IMPACT_COLORS: Record<string, string> = {

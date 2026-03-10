@@ -3,7 +3,7 @@ import { StoreInfo, Prompt } from '@/types'
 
 export interface ContentSuggestion {
   id: string
-  type: 'owned_media_article' | 'press_release' | 'case_study' | 'column'
+  type: 'owned_media_article' | 'press_release' | 'case_study' | 'column' | 'misinformation_correction'
   typeLabel: string
   title: string
   angle: string // 記事の切り口・アングル
@@ -20,6 +20,7 @@ const TYPE_LABELS: Record<ContentSuggestion['type'], string> = {
   press_release: 'プレスリリース',
   case_study: '事例紹介',
   column: '専門コラム',
+  misinformation_correction: '誤情報訂正記事',
 }
 
 export async function POST(request: NextRequest) {
@@ -27,8 +28,9 @@ export async function POST(request: NextRequest) {
     const {
       store,
       prompts,
+      rawResponsesByPrompt = {},
       clientApiKey,
-    }: { store: StoreInfo; prompts: Prompt[]; clientApiKey?: string } = await request.json()
+    }: { store: StoreInfo; prompts: Prompt[]; rawResponsesByPrompt?: Record<string, string[]>; clientApiKey?: string } = await request.json()
 
     if (!store || !prompts?.length) {
       return NextResponse.json({ error: '企業情報とプロンプトが必要です' }, { status: 400 })
@@ -41,6 +43,13 @@ export async function POST(request: NextRequest) {
 
     const winningPrompts = prompts.filter((p) => p.isWinning)
     const targetPrompts = winningPrompts.length > 0 ? winningPrompts : prompts
+
+    // Build raw AI responses summary for misinformation analysis
+    const rawResponsesSummary = targetPrompts.slice(0, 5).map((p) => {
+      const responses = (rawResponsesByPrompt as Record<string, string[]>)[p.id] || []
+      if (responses.length === 0) return ''
+      return 'Prompt: ' + p.text.substring(0, 80) + '\nAI Response sample: ' + (responses[0]?.substring(0, 300) || '')
+    }).filter(Boolean).join('\n\n')
 
     const promptList = targetPrompts.map((p) =>
       `ID:${p.id} | [${Math.round(p.displayRate ?? 0)}%] ${p.text}`
@@ -62,11 +71,21 @@ Achievements: ${store.achievements}
 Winning prompts (ID | display_rate% | text):
 ${promptList}
 
-Design 6-8 content pieces. Mix these types:
+${rawResponsesSummary ? `Sample AI responses (for misinformation analysis):
+${rawResponsesSummary}` : ''}
+
+Additionally, you have access to raw AI responses for each prompt. Analyze them for:
+1. Factual errors or outdated information about this industry/company
+2. Missing information that should be addressed
+3. Competitor-biased responses where this company should appear
+If you find misinformation opportunities, add 1-2 "misinformation_correction" type articles.
+
+Design 6-8 content pieces total. Mix these types:
 - owned_media_article (broad GEO coverage, info-dense)
 - case_study (specific outcomes, numbers)
 - press_release (newsworthy, widely cited as "latest news")
 - column (expert opinion, niche authority)
+- misinformation_correction (correct false/outdated info → become the authoritative source)
 
 For each piece, decide:
 1. Is it MULTI-prompt coverage (one article covers many prompts via shared requirements)?
