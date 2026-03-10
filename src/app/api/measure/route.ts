@@ -10,7 +10,7 @@ function generateId(): string {
 async function measureWithClaude(
   prompt: string,
   apiKey: string
-): Promise<{ response: string; error?: string }> {
+): Promise<{ response: string; citations?: string[]; error?: string }> {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -47,12 +47,21 @@ async function measureWithClaude(
       return { response: d2.content?.find((c: { type: string }) => c.type === 'text')?.text || '' }
     }
     const data = await res.json()
-    // Extract text blocks only (skip tool_use/tool_result blocks)
-    const text = (data.content as { type: string; text?: string }[])
+    // Extract text blocks
+    const text = (data.content as { type: string; text?: string; content?: {type:string;url?:string}[] }[])
       ?.filter((c) => c.type === 'text')
       .map((c) => c.text || '')
       .join('\n') || ''
-    return { response: text }
+    // Extract URLs from web_search tool results
+    const citations: string[] = []
+    for (const block of (data.content || [])) {
+      if (block.type === 'tool_result') {
+        for (const inner of (block.content || [])) {
+          if (inner.url) citations.push(inner.url)
+        }
+      }
+    }
+    return { response: text, citations }
   } catch {
     return { response: '', error: 'APIリクエストに失敗しました' }
   }
@@ -63,7 +72,7 @@ async function measureWithClaude(
 async function measureWithOpenAI(
   prompt: string,
   apiKey: string
-): Promise<{ response: string; error?: string }> {
+): Promise<{ response: string; citations?: string[]; error?: string }> {
   try {
     // Try search-enabled model first
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -109,7 +118,7 @@ async function measureWithOpenAI(
 async function measureWithGemini(
   prompt: string,
   apiKey: string
-): Promise<{ response: string; error?: string }> {
+): Promise<{ response: string; citations?: string[]; error?: string }> {
   try {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
@@ -137,7 +146,14 @@ async function measureWithGemini(
       return { response: d2.candidates?.[0]?.content?.parts?.[0]?.text || '' }
     }
     const data = await res.json()
-    return { response: data.candidates?.[0]?.content?.parts?.[0]?.text || '' }
+    const response = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    // Extract grounding URLs from Gemini search grounding metadata
+    const chunks: {web?: {uri?: string}}[] =
+      data.candidates?.[0]?.groundingMetadata?.groundingChunks || []
+    const citations: string[] = chunks
+      .map((c) => c.web?.uri || '')
+      .filter(Boolean)
+    return { response, citations }
   } catch {
     return { response: '', error: 'APIリクエストに失敗しました' }
   }
@@ -148,7 +164,7 @@ async function measureWithGemini(
 async function measureWithPerplexity(
   prompt: string,
   apiKey: string
-): Promise<{ response: string; error?: string }> {
+): Promise<{ response: string; citations?: string[]; error?: string }> {
   try {
     const res = await fetch('https://api.perplexity.ai/chat/completions', {
       method: 'POST',
@@ -164,7 +180,10 @@ async function measureWithPerplexity(
     })
     if (!res.ok) return { response: '', error: `Perplexity APIエラー: ${res.status}` }
     const data = await res.json()
-    return { response: data.choices[0]?.message?.content || '' }
+    const response = data.choices[0]?.message?.content || ''
+    // Perplexity returns citations separately
+    const citations: string[] = data.citations || []
+    return { response, citations }
   } catch {
     return { response: '', error: 'APIリクエストに失敗しました' }
   }
@@ -176,7 +195,8 @@ async function analyzeSentiment(
   response: string,
   storeName: string,
   competitors: string[],
-  apiKey: string
+  apiKey: string,
+  apiCitations: string[] = []
 ): Promise<{
   sentiment: Sentiment
   positiveElements: string
@@ -282,7 +302,7 @@ Notes:
     const aiSources: string[] = ((parsed.citedSources as string[]) || []).filter(
       (s) => typeof s === 'string'
     )
-    const mergedUrls = Array.from(new Set([...citedUrls, ...aiSources]))
+    const mergedUrls = Array.from(new Set([...citedUrls, ...aiSources, ...apiCitations]))
 
     const competitorRankings: { name: string; rank: number; snippet: string }[] =
       ((parsed.competitorRankings as { name: string; rank: number; snippet: string }[]) || [])
@@ -384,12 +404,13 @@ export async function POST(request: NextRequest) {
 
       // 3回計測
       const rawResponses: string[] = []
+      const apiCitations: string[] = []  // API-provided citation URLs
       let mentionCount = 0
 
       for (let trial = 0; trial < MEASURE_TIMES; trial++) {
         if (trial > 0) await new Promise((r) => setTimeout(r, 300))
 
-        let responseData: { response: string; error?: string }
+        let responseData: { response: string; citations?: string[]; error?: string }
         switch (platform) {
           case 'claude':
             responseData = await measureWithClaude(promptText, anthropicKey)
@@ -409,6 +430,10 @@ export async function POST(request: NextRequest) {
 
         if (!responseData.error && responseData.response) {
           rawResponses.push(responseData.response)
+          // Collect API-provided citations
+          for (const url of (responseData.citations || [])) {
+            if (!apiCitations.includes(url)) apiCitations.push(url)
+          }
           if (responseData.response.toLowerCase().includes(storeName.toLowerCase())) {
             mentionCount++
           }
@@ -443,7 +468,7 @@ export async function POST(request: NextRequest) {
         rawResponses[rawResponses.length - 1]
 
       const displayRate = Math.round((mentionCount / rawResponses.length) * 100)
-      const analysis = await analyzeSentiment(bestResponse, storeName, competitors, anthropicKey)
+      const analysis = await analyzeSentiment(bestResponse, storeName, competitors, anthropicKey, apiCitations)
 
       const competitorMentions: Record<string, boolean> = {}
       for (const competitor of competitors) {
