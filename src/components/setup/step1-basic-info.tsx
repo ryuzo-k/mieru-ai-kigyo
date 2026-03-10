@@ -1,12 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { Globe, Loader2 } from 'lucide-react'
+import { Globe, Loader2, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
 import { StoreInfo, BusinessType } from '@/types'
 
 interface Props {
@@ -22,6 +23,13 @@ const industryTypes: { value: BusinessType; label: string }[] = [
   { value: 'food', label: '小売・EC' },
 ]
 
+interface ScrapedData {
+  title?: string
+  description?: string
+  content?: string
+  metadata?: Record<string, string>
+}
+
 export function Step1BasicInfo({ initialData, onComplete }: Props) {
   const [businessType, setBusinessType] = useState<BusinessType>(
     initialData.businessType || 'other'
@@ -29,6 +37,7 @@ export function Step1BasicInfo({ initialData, onComplete }: Props) {
   const [name, setName] = useState(initialData.name)
   const [websiteUrl, setWebsiteUrl] = useState(initialData.websiteUrl)
   const [scraping, setScraping] = useState(false)
+  const [scrapedData, setScrapedData] = useState<ScrapedData | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
   const validate = () => {
@@ -41,6 +50,7 @@ export function Step1BasicInfo({ initialData, onComplete }: Props) {
   const handleScrapeWebsite = async () => {
     if (!websiteUrl) return
     setScraping(true)
+    setScrapedData(null)
     try {
       const res = await fetch('/api/scrape', {
         method: 'POST',
@@ -51,7 +61,11 @@ export function Step1BasicInfo({ initialData, onComplete }: Props) {
       if (data.error) {
         alert('スクレイピングに失敗しました: ' + data.error)
       } else {
-        alert('ウェブサイト情報を取得しました。次のステップで詳細を確認・編集できます。')
+        setScrapedData(data)
+        // タイトルから企業名を自動セット（未入力の場合）
+        if (!name && data.title) {
+          setName(data.title)
+        }
       }
     } catch {
       alert('スクレイピングに失敗しました')
@@ -67,6 +81,8 @@ export function Step1BasicInfo({ initialData, onComplete }: Props) {
       name: name.trim(),
       websiteUrl: websiteUrl.trim(),
       listingUrls: [],
+      // スクレイピングした概要があれば description に入れる
+      description: scrapedData?.description || '',
     })
   }
 
@@ -99,21 +115,6 @@ export function Step1BasicInfo({ initialData, onComplete }: Props) {
           </Select>
         </div>
 
-        {/* 企業名 */}
-        <div className="space-y-2">
-          <Label htmlFor="name">企業名（ブランド名）*</Label>
-          <Input
-            id="name"
-            placeholder="例：株式会社ミエルAI"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className={errors.name ? 'border-destructive' : ''}
-          />
-          {errors.name && (
-            <p className="text-sm text-destructive">{errors.name}</p>
-          )}
-        </div>
-
         {/* 公式ウェブサイト */}
         <div className="space-y-2">
           <Label htmlFor="websiteUrl">公式ウェブサイトURL（任意）</Label>
@@ -139,8 +140,57 @@ export function Step1BasicInfo({ initialData, onComplete }: Props) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            URLを入力して「取得」をクリックすると、ウェブサイトの情報を自動取得します（Firecrawl APIキーが必要）
+            URLを入力して「取得」をクリックすると、ウェブサイトの情報を自動取得します
           </p>
+        </div>
+
+        {/* スクレイピング結果の表示 */}
+        {scrapedData && (
+          <div className="rounded-lg border bg-green-50 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-green-700 font-medium text-sm">
+              <CheckCircle2 className="h-4 w-4" />
+              ウェブサイト情報を取得しました
+            </div>
+            {scrapedData.title && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">タイトル</p>
+                <p className="text-sm font-medium">{scrapedData.title}</p>
+              </div>
+            )}
+            {scrapedData.description && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">概要（meta description）</p>
+                <p className="text-sm">{scrapedData.description}</p>
+              </div>
+            )}
+            {scrapedData.content && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">取得したテキスト（一部）</p>
+                <p className="text-sm text-muted-foreground line-clamp-4 whitespace-pre-wrap">
+                  {scrapedData.content.substring(0, 400)}
+                  {scrapedData.content.length > 400 ? '...' : ''}
+                </p>
+              </div>
+            )}
+            <Badge variant="secondary" className="text-xs">
+              次のステップでAIが自動的にこの情報を分析します
+            </Badge>
+          </div>
+        )}
+
+        {/* 企業名 */}
+        <div className="space-y-2">
+          <Label htmlFor="name">企業名（ブランド名）*</Label>
+          <Input
+            id="name"
+            placeholder="例：株式会社ミエルAI"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={errors.name ? 'border-destructive' : ''}
+          />
+          {errors.name && (
+            <p className="text-sm text-destructive">{errors.name}</p>
+          )}
         </div>
 
         <Button onClick={handleSubmit} className="w-full">

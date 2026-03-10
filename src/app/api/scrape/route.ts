@@ -38,9 +38,12 @@ export async function POST(request: NextRequest) {
     }
 
     const data = await response.json()
+    const metadata = data.data?.metadata || {}
     return NextResponse.json({
       content: data.data?.markdown || '',
-      metadata: data.data?.metadata || {},
+      title: metadata.title || metadata.ogTitle || '',
+      description: metadata.description || metadata.ogDescription || '',
+      metadata,
     })
   } catch (error) {
     console.error('Scrape error:', error)
