@@ -828,6 +828,26 @@ ${allStats
                             )}
                           </div>
 
+                          {/* Cited Context — AIがどういう文脈で言及したか */}
+                          {(latestResult as MeasurementResult & { citedContext?: string; citedCompetitors?: string[] }).citedContext && (
+                            <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2">
+                              <p className="text-xs font-medium text-amber-700 mb-1">AIの言及文脈</p>
+                              <p className="text-xs text-amber-800">{(latestResult as MeasurementResult & { citedContext?: string }).citedContext}</p>
+                            </div>
+                          )}
+
+                          {/* Cited Competitors */}
+                          {((latestResult as MeasurementResult & { citedCompetitors?: string[] }).citedCompetitors ?? []).length > 0 && (
+                            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
+                              <p className="text-xs font-medium text-red-700 mb-1">同時に言及された競合</p>
+                              <div className="flex flex-wrap gap-1">
+                                {((latestResult as MeasurementResult & { citedCompetitors?: string[] }).citedCompetitors ?? []).map((c, i) => (
+                                  <span key={i} className="rounded-full bg-red-100 border border-red-300 px-2 py-0.5 text-xs text-red-700">{c}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Cited URLs */}
                           {latestResult.citedUrls.length > 0 && (
                             <div>

@@ -441,6 +441,20 @@ export default function PromptsPage() {
                           優先度:{priorityLabels[prompt.priority]}
                         </span>
 
+                        {/* Display Rate badge */}
+                        {prompt.displayRate !== undefined && (
+                          <Badge
+                            variant="outline"
+                            className={cn('text-xs font-semibold border',
+                              prompt.displayRate >= 67 ? 'border-green-300 text-green-700 bg-green-50' :
+                              prompt.displayRate >= 34 ? 'border-yellow-300 text-yellow-700 bg-yellow-50' :
+                              'border-slate-300 text-slate-500'
+                            )}
+                          >
+                            表示率 {Math.round(prompt.displayRate)}%
+                          </Badge>
+                        )}
+
                         {/* Pseudo memory tooltip */}
                         {prompt.pseudoMemory && (
                           <Tooltip>
