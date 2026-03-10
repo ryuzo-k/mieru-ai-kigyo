@@ -218,11 +218,12 @@ export default function AnalyticsPage() {
 
   const apiKeys = getApiKeys()
 
+  // APIキーがない場合はサーバー環境変数で動くためtrueにする
   const platformAvailability: Record<Platform, boolean> = {
-    claude: !!apiKeys.anthropic,
-    gemini: !!apiKeys.gemini,
-    chatgpt: !!apiKeys.openai,
-    perplexity: !!apiKeys.perplexity,
+    claude: true,  // サーバー側で ANTHROPIC_API_KEY を使用
+    gemini: true,  // サーバー側で GOOGLE_GEMINI_API_KEY を使用
+    chatgpt: true, // サーバー側で OPENAI_API_KEY を使用
+    perplexity: true, // サーバー側で PERPLEXITY_API_KEY を使用
   }
 
   const allResults = sessions.flatMap((s) => s.results)
@@ -280,14 +281,10 @@ export default function AnalyticsPage() {
 
   const handleMeasure = async () => {
     if (!store || measurablePrompts.length === 0) return
-    if (!apiKeys.anthropic) {
-      alert('Anthropic APIキーが必要です（設定から入力してください）')
-      return
-    }
-
     setMeasuring(true)
     setMeasureProgress(0)
 
+    // APIキーが設定されていない場合はサーバーの環境変数を使用
     const platformsToUse: Platform[] = ['claude']
     if (apiKeys.openai) platformsToUse.push('chatgpt')
     if (apiKeys.gemini) platformsToUse.push('gemini')
