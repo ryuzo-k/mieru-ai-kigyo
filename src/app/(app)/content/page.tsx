@@ -13,11 +13,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatDate } from '@/lib/utils'
+import { getApiKeys, generateId } from '@/lib/storage'
 import {
-  getGeneratedContents, saveGeneratedContents,
-  getApiKeys, generateId,
-} from '@/lib/storage'
-import { getStoreFromDB, getPromptsFromDB } from '@/lib/db'
+  getStoreFromDB, getPromptsFromDB,
+  getContentSuggestionsFromDB, saveContentSuggestionsToDB,
+  getGeneratedContentsFromDB, saveGeneratedContentToDB, updateGeneratedContentInDB,
+} from '@/lib/db'
 import { useCompany } from '@/context/company-context'
 import { StoreInfo, Prompt, GeneratedContent } from '@/types'
 import type { ContentSuggestion } from '@/app/api/suggest-contents/route'
@@ -170,7 +171,7 @@ export default function ContentPage() {
 
   // Generation state
   const [generatingId, setGeneratingId] = useState<string | null>(null)
-  const [generatedMap, setGeneratedMap] = useState<Record<string, { title: string; content: string }>>({})
+  const [generatedMap, setGeneratedMap] = useState<Record<string, { id: string; title: string; content: string }>>({})
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editBuffer, setEditBuffer] = useState('')
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -178,7 +179,8 @@ export default function ContentPage() {
   useEffect(() => {
     getStoreFromDB(companyId).then(setStore).catch(() => {})
     getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
-    setContents(getGeneratedContents())
+    getContentSuggestionsFromDB(companyId).then(setSuggestions).catch(() => {})
+    getGeneratedContentsFromDB(companyId).then(setContents).catch(() => {})
     setApiKey(getApiKeys().anthropic || '')
   }, [companyId])
 
@@ -200,7 +202,9 @@ export default function ContentPage() {
       })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
-      setSuggestions(data.suggestions || [])
+      const newSuggestions: ContentSuggestion[] = data.suggestions || []
+      setSuggestions(newSuggestions)
+      saveContentSuggestionsToDB(newSuggestions, companyId).catch(() => {})
     } catch (e) {
       setSuggestError((e as Error).message)
     } finally {
@@ -233,11 +237,6 @@ export default function ContentPage() {
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
 
-      setGeneratedMap((prev) => ({
-        ...prev,
-        [s.id]: { title: data.title || s.title, content: data.content || '' },
-      }))
-
       // Save to history
       const newContent: GeneratedContent = {
         id: generateId(),
@@ -248,9 +247,13 @@ export default function ContentPage() {
         generatedAt: new Date().toISOString(),
         editedAt: null,
       }
-      const updated = [newContent, ...contents]
-      saveGeneratedContents(updated)
-      setContents(updated)
+      saveGeneratedContentToDB(newContent, companyId).catch(() => {})
+      setContents((prev) => [newContent, ...prev])
+
+      setGeneratedMap((prev) => ({
+        ...prev,
+        [s.id]: { id: newContent.id, title: newContent.title, content: newContent.content },
+      }))
     } catch (e) {
       alert('生成に失敗しました: ' + (e as Error).message)
     } finally {
@@ -429,6 +432,8 @@ export default function ContentPage() {
                               <Textarea value={editBuffer} onChange={(e) => setEditBuffer(e.target.value)} className="min-h-[300px] font-mono text-sm" />
                               <div className="flex gap-2">
                                 <Button size="sm" onClick={() => {
+                                  const contentId = generatedMap[s.id]?.id
+                                  if (contentId) updateGeneratedContentInDB(contentId, { content: editBuffer, editedAt: new Date().toISOString() }).catch(() => {})
                                   setGeneratedMap((prev) => ({ ...prev, [s.id]: { ...prev[s.id], content: editBuffer } }))
                                   setEditingId(null)
                                 }} className="gap-1"><Save className="h-3.5 w-3.5" />保存</Button>

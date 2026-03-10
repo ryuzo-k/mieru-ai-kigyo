@@ -3,7 +3,8 @@
  * localStorageの代わりにSupabaseに保存・取得する
  */
 import { createClient } from '@supabase/supabase-js'
-import type { StoreInfo, Prompt, MeasurementResult, ApiKeys, MeasurementSchedule } from '@/types'
+import type { StoreInfo, Prompt, MeasurementResult, ApiKeys, MeasurementSchedule, GeneratedContent, WebsiteAnalysis } from '@/types'
+import type { ContentSuggestion } from '@/app/api/suggest-contents/route'
 
 const DEFAULT_COMPANY_ID = 'company_default'
 
@@ -329,4 +330,124 @@ export async function getRisingPrompts(minDelta = 10): Promise<PromptTrend[]> {
     prevRate: d.prev_rate ?? 0,
     trendDelta: d.trend_delta ?? 0,
   }))
+}
+
+// ── Content Suggestions ────────────────────────────────────────────────────
+
+export async function getContentSuggestionsFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<ContentSuggestion[]> {
+  const { data, error } = await getClient()
+    .from('content_suggestions')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+  if (error || !data) return []
+  return data.map((d) => ({
+    id: d.id,
+    type: d.type as ContentSuggestion['type'],
+    typeLabel: d.type_label,
+    title: d.title,
+    angle: d.angle,
+    coverageType: d.coverage_type as 'multi' | 'single',
+    coveredPromptIds: d.covered_prompt_ids || [],
+    coveredPromptTexts: d.covered_prompt_texts || [],
+    whyNow: d.why_now,
+    estimatedImpact: d.estimated_impact as 'high' | 'medium' | 'low',
+    keyRequirements: d.key_requirements || [],
+  }))
+}
+
+export async function saveContentSuggestionsToDB(suggestions: ContentSuggestion[], companyId: string = DEFAULT_COMPANY_ID): Promise<void> {
+  if (suggestions.length === 0) return
+  // Delete existing suggestions for this company before inserting new ones
+  await getClient().from('content_suggestions').delete().eq('company_id', companyId)
+  await getClient().from('content_suggestions').insert(
+    suggestions.map((s) => ({
+      id: s.id,
+      company_id: companyId,
+      type: s.type,
+      type_label: s.typeLabel,
+      title: s.title,
+      angle: s.angle,
+      coverage_type: s.coverageType,
+      covered_prompt_ids: s.coveredPromptIds,
+      covered_prompt_texts: s.coveredPromptTexts,
+      why_now: s.whyNow,
+      estimated_impact: s.estimatedImpact,
+      key_requirements: s.keyRequirements,
+    }))
+  )
+}
+
+export async function deleteContentSuggestionsFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<void> {
+  await getClient().from('content_suggestions').delete().eq('company_id', companyId)
+}
+
+// ── Generated Contents ─────────────────────────────────────────────────────
+
+export async function getGeneratedContentsFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<GeneratedContent[]> {
+  const { data, error } = await getClient()
+    .from('generated_contents')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+  if (error || !data) return []
+  return data.map((d) => ({
+    id: d.id,
+    medium: d.type as GeneratedContent['medium'],
+    title: d.title,
+    content: d.content,
+    promptIds: d.prompt_ids || [],
+    generatedAt: d.created_at,
+    editedAt: d.updated_at !== d.created_at ? d.updated_at : null,
+  }))
+}
+
+export async function saveGeneratedContentToDB(content: GeneratedContent, companyId: string = DEFAULT_COMPANY_ID): Promise<void> {
+  await getClient().from('generated_contents').upsert({
+    id: content.id,
+    company_id: companyId,
+    type: content.medium,
+    type_label: content.medium,
+    title: content.title,
+    content: content.content,
+    prompt_ids: content.promptIds,
+    created_at: content.generatedAt,
+    updated_at: content.editedAt || content.generatedAt,
+  })
+}
+
+export async function updateGeneratedContentInDB(id: string, updates: Partial<GeneratedContent>): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (updates.title !== undefined) patch.title = updates.title
+  if (updates.content !== undefined) patch.content = updates.content
+  if (updates.medium !== undefined) patch.type = updates.medium
+  if (updates.promptIds !== undefined) patch.prompt_ids = updates.promptIds
+  await getClient().from('generated_contents').update(patch).eq('id', id)
+}
+
+// ── Website Analyses ────────────────────────────────────────────────────────
+
+export async function getWebsiteAnalysesFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<WebsiteAnalysis[]> {
+  const { data, error } = await getClient()
+    .from('website_analyses')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+  if (error || !data) return []
+  return data.map((d) => ({
+    id: d.id,
+    url: d.url,
+    analyzedAt: d.created_at,
+    issues: (d.analysis as { issues?: WebsiteAnalysis['issues'] })?.issues || [],
+  }))
+}
+
+export async function saveWebsiteAnalysisToDB(analysis: WebsiteAnalysis, companyId: string = DEFAULT_COMPANY_ID): Promise<void> {
+  await getClient().from('website_analyses').upsert({
+    id: analysis.id,
+    company_id: companyId,
+    url: analysis.url,
+    analysis: { issues: analysis.issues, analyzedAt: analysis.analyzedAt },
+    created_at: analysis.analyzedAt,
+  })
 }
