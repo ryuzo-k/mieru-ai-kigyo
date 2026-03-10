@@ -429,7 +429,12 @@ export default function ContentPage() {
   const [contents, setContents] = useState<GeneratedContent[]>([])
   const [generating, setGenerating] = useState<ContentMedium | null>(null)
   const [activeMedium, setActiveMedium] = useState<ContentMedium>('google_business')
-  const [activeMainTab, setActiveMainTab] = useState<'generate' | 'pattern'>('generate')
+  const [activeMainTab, setActiveMainTab] = useState<'generate' | 'pattern' | 'competitor'>('generate')
+
+  // Competitor analysis state
+  const [competitorAnalyzing, setCompetitorAnalyzing] = useState(false)
+  const [competitorReport, setCompetitorReport] = useState<import('@/app/api/analyze-competitor-blogs/route').CompetitorBlogReport | null>(null)
+  const [competitorError, setCompetitorError] = useState<string | null>(null)
 
   // Inline editing state
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -535,7 +540,7 @@ export default function ContentPage() {
         </div>
 
         {/* Main tabs */}
-        <Tabs value={activeMainTab} onValueChange={(v) => setActiveMainTab(v as 'generate' | 'pattern')}>
+        <Tabs value={activeMainTab} onValueChange={(v) => setActiveMainTab(v as 'generate' | 'pattern' | 'competitor')}>
           <TabsList>
             <TabsTrigger value="generate" className="gap-1.5">
               <FileText className="h-4 w-4" />
@@ -544,6 +549,10 @@ export default function ContentPage() {
             <TabsTrigger value="pattern" className="gap-1.5">
               <BarChart2 className="h-4 w-4" />
               コンテンツパターン化
+            </TabsTrigger>
+            <TabsTrigger value="competitor" className="gap-1.5">
+              <BookOpen className="h-4 w-4" />
+              競合ブログ分析
             </TabsTrigger>
           </TabsList>
 
@@ -742,6 +751,179 @@ export default function ContentPage() {
                 )
               })}
             </Tabs>
+          </TabsContent>
+
+          {/* ── Competitor Blog Analysis tab ── */}
+          <TabsContent value="competitor" className="space-y-4 mt-4">
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="py-3 px-4">
+                <div className="flex gap-3">
+                  <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium mb-0.5">競合ブログ分析とは</p>
+                    <p className="text-xs leading-relaxed">
+                      競合企業のサイトをエージェンティックに分析し、どのコンテンツ形式（記事/LP/ホワイトペーパー等）がGEO観点で最も有効かを自動提案します。
+                      空白地帯を特定して「勝てるコンテンツ戦略」を即座に把握できます。
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {store && store.competitors && store.competitors.length > 0 ? (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">競合企業（登録済み）</CardTitle>
+                    <CardDescription className="text-xs">
+                      設定済みの競合企業 {store.competitors.length} 社を分析します
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {store.competitors.map((c) => (
+                        <Badge key={c.id} variant="secondary" className="text-xs">
+                          {c.name} {c.url ? `(${c.url})` : ''}
+                        </Badge>
+                      ))}
+                    </div>
+
+                    {competitorError && (
+                      <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                        {competitorError}
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={async () => {
+                        if (!apiKeys.anthropic) {
+                          setCompetitorError('Anthropic APIキーが必要です（設定から入力してください）')
+                          return
+                        }
+                        setCompetitorAnalyzing(true)
+                        setCompetitorError(null)
+                        setCompetitorReport(null)
+                        try {
+                          const res = await fetch('/api/analyze-competitor-blogs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              competitors: store.competitors,
+                              companyName: store.name,
+                              industry: store.businessType,
+                              targetPrompts: prompts.filter((p) => p.isWinning).map((p) => p.text),
+                              apiKey: apiKeys.anthropic,
+                            }),
+                          })
+                          const data = await res.json()
+                          if (data.error) {
+                            setCompetitorError(data.error)
+                            return
+                          }
+                          setCompetitorReport(data)
+                        } catch {
+                          setCompetitorError('分析中にエラーが発生しました')
+                        } finally {
+                          setCompetitorAnalyzing(false)
+                        }
+                      }}
+                      disabled={competitorAnalyzing}
+                      className="w-full"
+                    >
+                      {competitorAnalyzing ? (
+                        <><Loader2 className="h-4 w-4 mr-2 animate-spin" />競合ブログを分析中...</>
+                      ) : (
+                        <><BarChart2 className="h-4 w-4 mr-2" />競合ブログを分析して最適コンテンツ形式を提案</>
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                {competitorReport && (
+                  <div className="space-y-4">
+                    {/* Overall recommendation */}
+                    <Card className="border-green-300 bg-green-50">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base text-green-800">総合推奨コンテンツ戦略</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <div>
+                          <p className="text-sm font-semibold text-green-700">最推奨コンテンツタイプ</p>
+                          <p className="text-lg font-bold text-green-900">{competitorReport.overallRecommendation.topContentType}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-green-700">なぜ有効か</p>
+                          <p className="text-sm text-green-800">{competitorReport.overallRecommendation.whyItWins}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-green-700">すぐできるQuick Wins</p>
+                          <ul className="list-disc list-inside space-y-1">
+                            {competitorReport.overallRecommendation.quickWins.map((w, i) => (
+                              <li key={i} className="text-sm text-green-800">{w}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-green-700">コンテンツカレンダー提案</p>
+                          <p className="text-sm text-green-800">{competitorReport.overallRecommendation.contentCalendarSuggestion}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Per-competitor analysis */}
+                    {competitorReport.analyses.map((analysis, idx) => (
+                      <Card key={idx}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm">{analysis.competitorName}</CardTitle>
+                          <CardDescription className="text-xs">{analysis.blogUrl}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          <div className="grid grid-cols-1 gap-2">
+                            {analysis.contentTypes.map((ct, i) => (
+                              <div key={i} className="rounded-md border px-3 py-2 text-xs space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-medium">{ct.label}</span>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className={`text-xs ${ct.frequency === 'high' ? 'border-red-300 text-red-700' : ct.frequency === 'medium' ? 'border-yellow-300 text-yellow-700' : 'border-slate-300 text-slate-500'}`}>
+                                      頻度: {ct.frequency === 'high' ? '高' : ct.frequency === 'medium' ? '中' : '低'}
+                                    </Badge>
+                                    <Badge variant="outline" className={`text-xs ${ct.geoScore >= 70 ? 'border-green-300 text-green-700' : ct.geoScore >= 40 ? 'border-yellow-300 text-yellow-700' : 'border-slate-300 text-slate-500'}`}>
+                                      GEO: {ct.geoScore}点
+                                    </Badge>
+                                  </div>
+                                </div>
+                                {ct.topicPatterns.length > 0 && (
+                                  <p className="text-muted-foreground">トピック: {ct.topicPatterns.join(' / ')}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 space-y-1">
+                            <p className="text-xs font-semibold text-blue-700">推奨戦略: {analysis.recommendedStrategy.primaryType}</p>
+                            <p className="text-xs text-blue-600">{analysis.recommendedStrategy.reasoning}</p>
+                            {analysis.recommendedStrategy.suggestedTopics.length > 0 && (
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {analysis.recommendedStrategy.suggestedTopics.map((t, i) => (
+                                  <Badge key={i} variant="secondary" className="text-xs">{t}</Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                  <BookOpen className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
+                  <p>競合企業が登録されていません</p>
+                  <p className="text-xs mt-1">設定画面から競合企業のURLを登録してください</p>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* ── Pattern tab ── */}
