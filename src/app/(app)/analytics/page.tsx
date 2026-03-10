@@ -837,8 +837,28 @@ ${allStats
                             </div>
                           )}
 
-                          {/* Cited Competitors */}
-                          {((latestResult as MeasurementResult & { citedCompetitors?: string[] }).citedCompetitors ?? []).length > 0 && (
+                          {/* Competitor Rankings */}
+                          {((latestResult as MeasurementResult).competitorRankings ?? []).length > 0 && (
+                            <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
+                              <p className="text-xs font-medium text-red-700 mb-2">競合の出現順位</p>
+                              <div className="space-y-1.5">
+                                {((latestResult as MeasurementResult).competitorRankings ?? [])
+                                  .sort((a, b) => a.rank - b.rank)
+                                  .map((c, i) => (
+                                    <div key={i} className="flex items-start gap-2">
+                                      <span className="rounded-full bg-red-200 text-red-800 text-[10px] font-bold w-5 h-5 flex items-center justify-center shrink-0">{c.rank === 99 ? '-' : c.rank}</span>
+                                      <div>
+                                        <span className="text-xs font-medium text-red-800">{c.name}</span>
+                                        {c.snippet && <p className="text-[10px] text-red-600 mt-0.5">{c.snippet}</p>}
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                          {/* Cited Competitors (fallback if no rankings) */}
+                          {((latestResult as MeasurementResult).competitorRankings ?? []).length === 0 &&
+                            ((latestResult as MeasurementResult & { citedCompetitors?: string[] }).citedCompetitors ?? []).length > 0 && (
                             <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2">
                               <p className="text-xs font-medium text-red-700 mb-1">同時に言及された競合</p>
                               <div className="flex flex-wrap gap-1">

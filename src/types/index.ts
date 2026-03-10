@@ -82,6 +82,7 @@ export interface MeasurementResult {
   citedContext: string  // どういう文脈で言及されたか
   citedCompetitors: string[]  // 同時に言及された競合
   competitorMentions: Record<string, boolean>
+  competitorRankings?: {name: string; rank: number; snippet: string}[]  // 競合の出現順位
   measuredAt: string
 }
 

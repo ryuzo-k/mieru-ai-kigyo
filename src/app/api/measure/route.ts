@@ -119,6 +119,7 @@ async function analyzeSentiment(
   citedUrls: string[]
   citedContext: string
   citedCompetitors: string[]
+  competitorRankings?: {name: string; rank: number; snippet: string}[]
 }> {
   const lowerResponse = response.toLowerCase()
   const lowerName = storeName.toLowerCase()
@@ -159,18 +160,24 @@ async function analyzeSentiment(
         messages: [
           {
             role: 'user',
-            content: `以下のAI回答を分析してください。企業名「${storeName}」に関する記述を分析し、GEO観点でのインサイトを抽出してください。
+            content: `Analyze this AI response for GEO (Generative Engine Optimization) insights.
+Target company: "${storeName}"
+Competitors to track: ${competitors.length > 0 ? competitors.join(', ') : 'none specified'}
 
-回答:
+AI response:
 ${response.substring(0, 2000)}
 
-以下のJSONのみを返してください：
+Return ONLY this JSON (no markdown, no extra text):
 {
-  "sentiment": "positive" | "neutral" | "negative",
-  "positiveElements": "ポジティブな要素（ない場合は空文字）",
-  "negativeElements": "ネガティブな要素（ない場合は空文字）",
-  "citedContext": "AIがこの企業をどういう文脈・カテゴリで言及したか（例：「DX支援の具体的な事例として」「コスト削減ソリューションの一つとして」など。言及なければ空文字）"
-}`,
+  "sentiment": "positive" or "neutral" or "negative" (how the target company is portrayed; neutral if not mentioned),
+  "positiveElements": "positive aspects mentioned about the target company (empty string if none)",
+  "negativeElements": "negative aspects mentioned about the target company (empty string if none)",
+  "citedContext": "in what context/category was the target company mentioned (empty string if not mentioned)",
+  "competitorRankings": [{"name": "competitor name", "rank": 1, "snippet": "brief quote"}],
+  "citedSources": ["domain1.com", "domain2.com"]
+}
+For competitorRankings: list each competitor mentioned, rank them by order of appearance (1=first mentioned). If a competitor is not mentioned, omit it.
+For citedSources: extract domain names or URLs that the AI response references or cites as sources.`,
           },
         ],
       }),
@@ -190,14 +197,29 @@ ${response.substring(0, 2000)}
       parsed = match ? JSON.parse(match[0]) : {}
     }
 
+    // Merge AI-extracted sources with regex-found URLs
+    const aiSources: string[] = (parsed.citedSources || []).filter((s: string) => typeof s === 'string')
+    const mergedUrls = Array.from(new Set([...citedUrls, ...aiSources]))
+
+    // Competitor rankings from AI analysis
+    const competitorRankings: {name: string; rank: number; snippet: string}[] = parsed.competitorRankings || []
+    // Also add any competitors mentioned that AI missed
+    const rankedNames = new Set(competitorRankings.map((c: {name: string}) => c.name.toLowerCase()))
+    competitors.forEach(c => {
+      if (lowerResponse.includes(c.toLowerCase()) && !rankedNames.has(c.toLowerCase())) {
+        competitorRankings.push({ name: c, rank: 99, snippet: '' })
+      }
+    })
+
     return {
       sentiment: (parsed.sentiment as Sentiment) || 'neutral',
       positiveElements: parsed.positiveElements || '',
       negativeElements: parsed.negativeElements || '',
       mentionPosition,
-      citedUrls,
+      citedUrls: mergedUrls,
       citedContext: parsed.citedContext || '',
-      citedCompetitors,
+      citedCompetitors: competitorRankings.map((c: {name: string}) => c.name),
+      competitorRankings,
     }
   } catch {
     return { sentiment: 'neutral', positiveElements: '', negativeElements: '', mentionPosition, citedUrls, citedContext: '', citedCompetitors }
