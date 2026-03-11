@@ -46,8 +46,8 @@ export async function POST(req: NextRequest) {
 
     const totalOps = (promptsData?.length || 0)
 
-    // ジョブ作成
-    await supabase.from('measurement_jobs').insert({
+    // ジョブ作成（テーブルが存在しない場合もエラーにしない）
+    const { error: insertError } = await supabase.from('measurement_jobs').insert({
       id: jobId,
       company_id: companyId,
       status: 'running',
@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
       completed_prompts: 0,
       current_prompt_text: '',
     })
+    if (insertError) {
+      console.error('measurement_jobs insert error (continuing anyway):', insertError)
+    }
 
     // バックグラウンドで非同期処理
     Promise.resolve().then(async () => {
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
         try {
           await supabase.from('measurement_jobs').update({
             current_prompt_text: prompt.text.substring(0, 100),
-          }).eq('id', jobId)
+          }).eq('id', jobId).then(() => {})
 
           await fetch(`${SITE_URL}/api/measure`, {
             method: 'POST',

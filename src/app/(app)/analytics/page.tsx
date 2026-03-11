@@ -305,6 +305,8 @@ export default function AnalyticsPage() {
       setMeasureProgressText(`計測中（0/${total}件完了）`)
 
       // 5秒ごとに進捗をポーリング
+      let lastCompleted = 0
+      let staleSince = 0
       const interval = setInterval(async () => {
         try {
           const prog = await fetch(`/api/measure-all?jobId=${jobId}&companyId=${companyId}`)
@@ -320,6 +322,21 @@ export default function AnalyticsPage() {
               ? job.currentPromptText.substring(0, 30) + '…'
               : job.currentPromptText
             setMeasureProgressText(`「${short}」を計測中（${job.completedPrompts}/${job.totalPrompts}件）`)
+          }
+
+          // 進捗が止まったら検知（2分間変化なし）
+          if (job.completedPrompts === lastCompleted) {
+            staleSince++
+            if (staleSince >= 24) { // 24 * 5sec = 2min
+              clearInterval(interval)
+              setMeasuring(false)
+              setMeasureProgressText('タイムアウト。計測結果を確認してください')
+              getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
+              return
+            }
+          } else {
+            staleSince = 0
+            lastCompleted = job.completedPrompts
           }
 
           if (job.status === 'completed' || job.status === 'failed') {
