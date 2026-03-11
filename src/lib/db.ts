@@ -573,3 +573,70 @@ export async function saveContractToDB(contract: ContractRecord): Promise<void> 
 export async function deleteContractFromDB(id: string): Promise<void> {
   await getClient().from('contracts').delete().eq('id', id)
 }
+
+// ── Project Tasks ────────────────────────────────────────────────────────────
+
+export interface ProjectTask {
+  id: string
+  title: string
+  description: string
+  taskType: 'milestone' | 'meeting' | 'deliverable' | 'measurement' | 'content' | 'report'
+  scheduledDate: string
+  scheduledTime?: string
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
+  assignee: 'us' | 'client' | 'both'
+  notes?: string
+}
+
+export async function getProjectTasksFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<ProjectTask[]> {
+  const { data, error } = await getClient()
+    .from('project_tasks')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('scheduled_date', { ascending: true })
+  if (error || !data) return []
+  return data.map((d) => ({
+    id: d.id,
+    title: d.title,
+    description: d.description || '',
+    taskType: d.task_type as ProjectTask['taskType'],
+    scheduledDate: d.scheduled_date,
+    scheduledTime: d.scheduled_time || undefined,
+    status: d.status as ProjectTask['status'],
+    assignee: (d.assignee || 'us') as ProjectTask['assignee'],
+    notes: d.notes || undefined,
+  }))
+}
+
+export async function saveProjectTaskToDB(task: ProjectTask, companyId: string = DEFAULT_COMPANY_ID): Promise<void> {
+  await getClient().from('project_tasks').upsert({
+    id: task.id,
+    company_id: companyId,
+    title: task.title,
+    description: task.description || null,
+    task_type: task.taskType,
+    scheduled_date: task.scheduledDate,
+    scheduled_time: task.scheduledTime || null,
+    status: task.status,
+    assignee: task.assignee || null,
+    notes: task.notes || null,
+    updated_at: new Date().toISOString(),
+  })
+}
+
+export async function updateProjectTaskInDB(id: string, updates: Partial<ProjectTask>): Promise<void> {
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (updates.title !== undefined) patch.title = updates.title
+  if (updates.description !== undefined) patch.description = updates.description
+  if (updates.taskType !== undefined) patch.task_type = updates.taskType
+  if (updates.scheduledDate !== undefined) patch.scheduled_date = updates.scheduledDate
+  if (updates.scheduledTime !== undefined) patch.scheduled_time = updates.scheduledTime
+  if (updates.status !== undefined) patch.status = updates.status
+  if (updates.assignee !== undefined) patch.assignee = updates.assignee
+  if (updates.notes !== undefined) patch.notes = updates.notes
+  await getClient().from('project_tasks').update(patch).eq('id', id)
+}
+
+export async function deleteProjectTaskFromDB(id: string): Promise<void> {
+  await getClient().from('project_tasks').delete().eq('id', id)
+}

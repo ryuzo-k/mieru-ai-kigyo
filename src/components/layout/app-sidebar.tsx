@@ -14,6 +14,7 @@ import {
   Building2,
   Presentation,
   FileSignature,
+  Calendar,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -68,6 +69,11 @@ const navItems = [
     title: '契約書',
     href: '/contracts',
     icon: FileSignature,
+  },
+  {
+    title: '実施スケジュール',
+    href: '/schedule',
+    icon: Calendar,
   },
 ]
 
