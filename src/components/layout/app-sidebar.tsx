@@ -12,6 +12,7 @@ import {
   Settings,
   Zap,
   Building2,
+  Presentation,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -56,6 +57,11 @@ const navItems = [
     title: 'メディア・PRアウトリーチ',
     href: '/outreach',
     icon: Mail,
+  },
+  {
+    title: '提案資料',
+    href: '/proposals',
+    icon: Presentation,
   },
 ]
 
