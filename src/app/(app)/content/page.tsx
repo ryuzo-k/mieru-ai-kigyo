@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   Loader2, Copy, Check, RefreshCw, FileText, Pencil, Save, X,
   ChevronRight, Sparkles, Megaphone, BookOpen, BarChart2,
-  CheckSquare, Zap, ArrowRight, AlertTriangle, Calendar, Clock,
+  CheckSquare, Zap, ArrowRight, AlertTriangle, Calendar, Clock, ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,9 +18,10 @@ import {
   getStoreFromDB, getPromptsFromDB,
   getContentSuggestionsFromDB, saveContentSuggestionsToDB,
   getGeneratedContentsFromDB, saveGeneratedContentToDB, updateGeneratedContentInDB,
+  getMeasurementResultsFromDB,
 } from '@/lib/db'
 import { useCompany } from '@/context/company-context'
-import { StoreInfo, Prompt, GeneratedContent } from '@/types'
+import { StoreInfo, Prompt, GeneratedContent, MeasurementResult } from '@/types'
 import type { ContentSuggestion } from '@/app/api/suggest-contents/route'
 import type { CompetitorBlogReport as CompetitorBlogReportType } from '@/app/api/analyze-competitor-blogs/route'
 import type { ContentScheduleItem } from '@/app/api/generate-schedule/route'
@@ -379,6 +380,7 @@ export default function ContentPage() {
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [contents, setContents] = useState<GeneratedContent[]>([])
+  const [allResults, setAllResults] = useState<MeasurementResult[]>([])
   const [apiKey, setApiKey] = useState('')
 
   // Suggestion state
@@ -398,6 +400,7 @@ export default function ContentPage() {
     getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
     getContentSuggestionsFromDB(companyId).then(setSuggestions).catch(() => {})
     getGeneratedContentsFromDB(companyId).then(setContents).catch(() => {})
+    getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
     setApiKey(getApiKeys().anthropic || '')
   }, [companyId])
 
@@ -415,7 +418,12 @@ export default function ContentPage() {
       const res = await fetch('/api/suggest-contents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store, prompts: targetPrompts, clientApiKey: apiKey }),
+        body: JSON.stringify({
+          store,
+          prompts: targetPrompts,
+          measurementResults: allResults,
+          clientApiKey: apiKey,
+        }),
       })
       if (!res.ok) throw new Error(await res.text())
       const data = await res.json()
@@ -630,6 +638,24 @@ export default function ContentPage() {
                           ))}
                         </ul>
                       </div>
+
+                      {/* Referenced sites */}
+                      {s.referencedSites && s.referencedSites.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground">参照した競合・引用サイト</p>
+                          <div className="flex flex-col gap-0.5">
+                            {s.referencedSites.slice(0, 3).map((url, i) => (
+                              <div key={i} className="flex items-center gap-1.5">
+                                <ExternalLink className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="text-xs text-muted-foreground truncate">{url}</span>
+                              </div>
+                            ))}
+                            {s.referencedSites.length > 3 && (
+                              <span className="text-xs text-muted-foreground pl-4">+{s.referencedSites.length - 3}件</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Action */}
                       {generated ? (

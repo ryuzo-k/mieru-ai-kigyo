@@ -353,6 +353,7 @@ export async function getContentSuggestionsFromDB(companyId: string = DEFAULT_CO
     whyNow: d.why_now,
     estimatedImpact: d.estimated_impact as 'high' | 'medium' | 'low',
     keyRequirements: d.key_requirements || [],
+    referencedSites: d.referenced_sites || [],
   }))
 }
 
@@ -374,6 +375,7 @@ export async function saveContentSuggestionsToDB(suggestions: ContentSuggestion[
       why_now: s.whyNow,
       estimated_impact: s.estimatedImpact,
       key_requirements: s.keyRequirements,
+      referenced_sites: s.referencedSites || [],
     }))
   )
 }
@@ -450,4 +452,50 @@ export async function saveWebsiteAnalysisToDB(analysis: WebsiteAnalysis, company
     analysis: { issues: analysis.issues, analyzedAt: analysis.analyzedAt },
     created_at: analysis.analyzedAt,
   })
+}
+
+// ── Proposals ──────────────────────────────────────────────────────────────
+
+export interface ProposalRecord {
+  id: string
+  companyId: string
+  targetCompanyName: string
+  targetCompanyUrl?: string
+  meetingNotes?: string
+  slides: unknown[]
+  createdAt: string
+}
+
+export async function getProposalsFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<ProposalRecord[]> {
+  const { data, error } = await getClient()
+    .from('proposals')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+  if (error || !data) return []
+  return data.map((d) => ({
+    id: d.id,
+    companyId: d.company_id,
+    targetCompanyName: d.target_company_name,
+    targetCompanyUrl: d.target_company_url || undefined,
+    meetingNotes: d.meeting_notes || undefined,
+    slides: d.slides || [],
+    createdAt: d.created_at,
+  }))
+}
+
+export async function saveProposalToDB(proposal: ProposalRecord): Promise<void> {
+  await getClient().from('proposals').upsert({
+    id: proposal.id,
+    company_id: proposal.companyId,
+    target_company_name: proposal.targetCompanyName,
+    target_company_url: proposal.targetCompanyUrl || null,
+    meeting_notes: proposal.meetingNotes || null,
+    slides: proposal.slides,
+    created_at: proposal.createdAt,
+  })
+}
+
+export async function deleteProposalFromDB(id: string): Promise<void> {
+  await getClient().from('proposals').delete().eq('id', id)
 }
