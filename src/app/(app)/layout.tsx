@@ -4,7 +4,6 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/layout/app-sidebar'
-import { isSetupCompleted } from '@/lib/storage'
 import { Separator } from '@/components/ui/separator'
 import { CompanyContext } from '@/context/company-context'
 
@@ -15,10 +14,8 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const [companyId, setCompanyId] = useState('company_default')
 
   useEffect(() => {
-    if (!isSetupCompleted()) {
-      router.replace('/setup')
-      return
-    }
+    // Supabaseベースのため、localStorage setupチェックをスキップして
+    // ?company= パラメータがなければ企業一覧に誘導する
     const cid = searchParams.get('company')
     if (!cid) {
       router.replace('/companies')
