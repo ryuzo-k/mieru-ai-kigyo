@@ -1,14 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ChevronDown, ChevronUp, Copy, Check, Download, Loader2, Presentation, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Copy, Check, Download, ExternalLink, Loader2, Presentation, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { useCompany } from '@/context/company-context'
-import { getStoreFromDB, getApiKeysFromDB, getProposalsFromDB, saveProposalToDB, deleteProposalFromDB } from '@/lib/db'
+import { getStoreFromDB, getApiKeysFromDB, getProposalsFromDB, saveProposalToDB, deleteProposalFromDB, getGoogleTokenFromDB } from '@/lib/db'
 import { generateId } from '@/lib/storage'
 import type { ProposalSlide } from '@/app/api/generate-proposal/route'
 import type { ProposalRecord } from '@/lib/db'
@@ -34,9 +34,15 @@ export default function ProposalsPage() {
   const [activeProposal, setActiveProposal] = useState<ProposalRecord | null>(null)
   const [expandedSlides, setExpandedSlides] = useState<Record<number, boolean>>({})
   const [copiedSlide, setCopiedSlide] = useState<number | null>(null)
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [exportingSlides, setExportingSlides] = useState(false)
+  const [exportError, setExportError] = useState('')
 
   useEffect(() => {
     getProposalsFromDB(companyId).then(setProposals)
+    getGoogleTokenFromDB(companyId).then(({ accessToken }) => {
+      setGoogleConnected(!!accessToken)
+    }).catch(() => {})
   }, [companyId])
 
   async function handleGenerate() {
@@ -137,6 +143,35 @@ export default function ProposalsPage() {
     a.download = `proposal_${proposal.targetCompanyName}_${proposal.createdAt.substring(0, 10)}.md`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  async function handleExportToSlides() {
+    if (!activeProposal) return
+    setExportingSlides(true)
+    setExportError('')
+    try {
+      const res = await fetch('/api/export-to-slides', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slides: activeProposal.slides,
+          title: `${activeProposal.targetCompanyName} 様 提案書`,
+          companyId,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setExportError(data.error || 'エクスポートに失敗しました')
+        downloadMarkdown(activeProposal)
+        return
+      }
+      window.open(data.url, '_blank')
+    } catch (err) {
+      setExportError('エクスポートに失敗しました: ' + (err as Error).message)
+      downloadMarkdown(activeProposal)
+    } finally {
+      setExportingSlides(false)
+    }
   }
 
   const isLoading = loadingStep !== null
@@ -259,13 +294,44 @@ export default function ProposalsPage() {
       {/* Active Proposal Slides */}
       {activeProposal && (
         <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="font-semibold">{activeProposal.targetCompanyName} 様 提案書</h2>
-            <Button size="sm" variant="outline" onClick={() => downloadMarkdown(activeProposal)}>
-              <Download className="h-4 w-4 mr-1.5" />
-              ダウンロード（MD）
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {googleConnected ? (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={handleExportToSlides}
+                  disabled={exportingSlides}
+                >
+                  {exportingSlides ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                      書き出し中...
+                    </>
+                  ) : (
+                    <>
+                      <ExternalLink className="h-4 w-4 mr-1.5" />
+                      Googleスライドに書き出す
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  ※ <a href="/settings" className="underline">設定画面</a>でGoogle連携するとスライドに書き出せます
+                </p>
+              )}
+              <Button size="sm" variant="outline" onClick={() => downloadMarkdown(activeProposal)}>
+                <Download className="h-4 w-4 mr-1.5" />
+                ダウンロード（MD）
+              </Button>
+            </div>
           </div>
+          {exportError && (
+            <p className="text-xs text-destructive bg-destructive/10 px-3 py-2 rounded">
+              {exportError}（マークダウンにフォールバックしました）
+            </p>
+          )}
           {(activeProposal.slides as ProposalSlide[]).map((slide) => (
             <Card key={slide.slideNumber} className="overflow-hidden">
               <CardHeader className="pb-3">
