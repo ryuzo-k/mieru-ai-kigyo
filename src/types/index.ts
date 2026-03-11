@@ -41,6 +41,10 @@ export interface StoreInfo {
   achievements: string
   positioning: string
   competitors: Competitor[]
+  // ユーザージャーニー（プロンプト生成の核）
+  userJourneyStages?: string  // 課題認識〜サービス選定の各ステージの詳細
+  targetPersona?: string     // ターゲットの職種・役職・課題感
+  brandDocuments?: string    // ブランド資料・会社紹介文など自由記述
   createdAt: string
   updatedAt: string
 }

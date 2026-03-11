@@ -23,6 +23,9 @@ export function Step2BrandDetails({ storeInfo, onComplete, onBack }: Props) {
   const [services, setServices] = useState(storeInfo.services)
   const [achievements, setAchievements] = useState(storeInfo.achievements)
   const [positioning, setPositioning] = useState(storeInfo.positioning)
+  const [targetPersona, setTargetPersona] = useState(storeInfo.targetPersona || '')
+  const [userJourneyStages, setUserJourneyStages] = useState(storeInfo.userJourneyStages || '')
+  const [brandDocuments, setBrandDocuments] = useState(storeInfo.brandDocuments || '')
   const [competitors, setCompetitors] = useState<Competitor[]>(
     storeInfo.competitors || []
   )
@@ -53,6 +56,9 @@ export function Step2BrandDetails({ storeInfo, onComplete, onBack }: Props) {
       achievements,
       positioning,
       competitors,
+      targetPersona,
+      userJourneyStages,
+      brandDocuments,
     })
   }
 
@@ -98,6 +104,27 @@ export function Step2BrandDetails({ storeInfo, onComplete, onBack }: Props) {
       placeholder: '例：日本でGEO対策をいち早く商業化したパイオニア。大手ツールにないきめ細かい日本語対応と「影響プロンプト特定」の精度で差別化。',
       value: positioning,
       onChange: setPositioning,
+    },
+    {
+      id: 'targetPersona',
+      label: 'ターゲットペルソナ（職種・役職・課題感）',
+      placeholder: '例：中堅〜大手SaaS企業の営業責任者・事業開発部長。大手企業アポが取れず新規開拓が止まっている。LinkedInやSNS経由でのアプローチ方法を模索している。',
+      value: targetPersona,
+      onChange: setTargetPersona,
+    },
+    {
+      id: 'userJourneyStages',
+      label: 'ユーザージャーニー（課題認識〜契約までの流れ）',
+      placeholder: '例：①大手アポが取れない課題を認識→②GoogleやAIで「エンタープライズ営業代行」を検索→③比較サイトやレビューで候補を絞る→④実績・事例を確認→⑤問い合わせ→⑥契約',
+      value: userJourneyStages,
+      onChange: setUserJourneyStages,
+    },
+    {
+      id: 'brandDocuments',
+      label: 'ブランド資料・会社紹介文（LP文章・サービス説明など）',
+      placeholder: '会社紹介資料の文章、サービス説明文、LP原稿など自由に貼り付けてください。プロンプト生成の精度が大幅に向上します。',
+      value: brandDocuments,
+      onChange: setBrandDocuments,
     },
   ]
 

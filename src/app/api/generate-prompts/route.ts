@@ -92,9 +92,14 @@ export async function POST(request: NextRequest) {
 市場ポジショニング: ${store.positioning}
 競合企業: ${store.competitors.map((c) => c.name).join('、') || '不明'}
 ${store.websiteUrl ? `公式サイト: ${store.websiteUrl}` : ''}
+${(store as unknown as Record<string, unknown>).targetPersona ? `ターゲットペルソナ: ${(store as unknown as Record<string, unknown>).targetPersona}` : ''}
+${(store as unknown as Record<string, unknown>).userJourneyStages ? `ユーザージャーニー: ${(store as unknown as Record<string, unknown>).userJourneyStages}` : ''}
+${(store as unknown as Record<string, unknown>).brandDocuments ? `ブランド資料・追加情報:
+${String((store as unknown as Record<string, unknown>).brandDocuments).substring(0, 2000)}` : ''}
 
 【重要】
-- awareness カテゴリは「${store.targetAudience}」が課題解決・サービス選定する際に実際に入力する質問を想定すること
+- awareness カテゴリは上記のユーザージャーニー・ターゲットペルソナをベースに、実際に入力される質問を想定すること
+- ユーザージャーニーの各ステージ（課題認識・手法理解・サービス比較・コスト検討・事例確認など）から均等にプロンプトを生成すること
 - **awareness の各プロンプトは必ず「課題質問 ＋ おすすめ会社の推薦要求」を1文にまとめること**（例：「〜する方法を教えてください。また、おすすめの会社も教えてください。」）
 - ${brandName}が推薦・言及されるポテンシャルがある質問を選ぶこと
 - 企業名を直接含むプロンプトは reputation カテゴリのみにすること（awareness は企業名なしの一般質問）`
