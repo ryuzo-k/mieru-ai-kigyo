@@ -45,6 +45,9 @@ export interface StoreInfo {
   userJourneyStages?: string  // 課題認識〜サービス選定の各ステージの詳細
   targetPersona?: string     // ターゲットの職種・役職・課題感
   brandDocuments?: string    // ブランド資料・会社紹介文など自由記述
+  // GA4連携
+  ga4MeasurementId?: string  // G-XXXXXXXXXX形式
+  ga4PropertyId?: string     // GA4プロパティID
   createdAt: string
   updatedAt: string
 }
@@ -125,11 +128,13 @@ export interface GeneratedContent {
 // ウェブサイト改善提案
 export interface WebsiteIssue {
   id: string
-  type: string
-  severity: 'high' | 'medium' | 'low'
-  description: string
-  fixCode: string
-  platform: 'wordpress' | 'html' | 'studio' | 'all'
+  category: 'metadata' | 'structured_data' | 'content' | 'internal_links' | 'trust'
+  priority: 'critical' | 'high' | 'medium'
+  issue: string
+  currentCode?: string
+  fixedCode: string
+  explanation: string
+  estimatedImpact: string
 }
 
 export interface WebsiteAnalysis {

@@ -13,6 +13,7 @@ import {
   Zap,
   Building2,
   Presentation,
+  FileSignature,
 } from 'lucide-react'
 import {
   Sidebar,
@@ -62,6 +63,11 @@ const navItems = [
     title: '提案資料',
     href: '/proposals',
     icon: Presentation,
+  },
+  {
+    title: '契約書',
+    href: '/contracts',
+    icon: FileSignature,
   },
 ]
 

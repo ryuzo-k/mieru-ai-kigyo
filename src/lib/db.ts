@@ -38,6 +38,8 @@ export async function getStoreFromDB(companyId: string = DEFAULT_COMPANY_ID): Pr
     achievements: data.achievements,
     positioning: data.positioning,
     competitors: data.competitors || [],
+    ga4MeasurementId: data.ga4_measurement_id || undefined,
+    ga4PropertyId: data.ga4_property_id || undefined,
     createdAt: data.created_at,
     updatedAt: data.updated_at,
   }
@@ -57,6 +59,8 @@ export async function saveStoreToDB(store: StoreInfo, companyId: string = DEFAUL
     achievements: store.achievements,
     positioning: store.positioning,
     competitors: store.competitors,
+    ga4_measurement_id: store.ga4MeasurementId || null,
+    ga4_property_id: store.ga4PropertyId || null,
     updated_at: new Date().toISOString(),
   })
 }
@@ -82,6 +86,8 @@ export async function getAllCompaniesFromDB(): Promise<StoreInfo[]> {
     achievements: d.achievements,
     positioning: d.positioning,
     competitors: d.competitors || [],
+    ga4MeasurementId: d.ga4_measurement_id || undefined,
+    ga4PropertyId: d.ga4_property_id || undefined,
     createdAt: d.created_at,
     updatedAt: d.updated_at,
   }))
@@ -101,6 +107,8 @@ export async function createCompanyInDB(store: StoreInfo): Promise<void> {
     achievements: store.achievements,
     positioning: store.positioning,
     competitors: store.competitors,
+    ga4_measurement_id: store.ga4MeasurementId || null,
+    ga4_property_id: store.ga4PropertyId || null,
     created_at: store.createdAt || new Date().toISOString(),
     updated_at: new Date().toISOString(),
   })
@@ -253,6 +261,20 @@ export async function getApiKeysFromDB(companyId: string = DEFAULT_COMPANY_ID): 
     gemini: data?.gemini || '',
     perplexity: data?.perplexity || '',
     firecrawl: data?.firecrawl || '',
+  }
+}
+
+export async function getGoogleTokenFromDB(
+  companyId: string = DEFAULT_COMPANY_ID
+): Promise<{ accessToken: string | null; email: string | null }> {
+  const { data } = await getClient()
+    .from('api_keys')
+    .select('google_access_token, google_email')
+    .eq('id', companyId)
+    .single()
+  return {
+    accessToken: data?.google_access_token || null,
+    email: data?.google_email || null,
   }
 }
 
@@ -498,4 +520,56 @@ export async function saveProposalToDB(proposal: ProposalRecord): Promise<void> 
 
 export async function deleteProposalFromDB(id: string): Promise<void> {
   await getClient().from('proposals').delete().eq('id', id)
+}
+
+// ── Contracts ───────────────────────────────────────────────────────────────
+
+export interface ContractSummary {
+  tasks: { title: string; description: string; deadline?: string }[]
+  payments: { amount: string; condition: string; dueDate?: string }[]
+  prohibitions: string[]
+  specialNotes: string[]
+  contractPeriod: string
+  parties: { client: string; contractor: string }
+}
+
+export interface ContractRecord {
+  id: string
+  companyId: string
+  filename: string
+  pdfUrl?: string
+  summary: ContractSummary
+  createdAt: string
+}
+
+export async function getContractsFromDB(companyId: string = DEFAULT_COMPANY_ID): Promise<ContractRecord[]> {
+  const { data, error } = await getClient()
+    .from('contracts')
+    .select('*')
+    .eq('company_id', companyId)
+    .order('created_at', { ascending: false })
+  if (error || !data) return []
+  return data.map((d) => ({
+    id: d.id,
+    companyId: d.company_id,
+    filename: d.filename,
+    pdfUrl: d.pdf_url || undefined,
+    summary: d.summary as ContractSummary,
+    createdAt: d.created_at,
+  }))
+}
+
+export async function saveContractToDB(contract: ContractRecord): Promise<void> {
+  await getClient().from('contracts').upsert({
+    id: contract.id,
+    company_id: contract.companyId,
+    filename: contract.filename,
+    pdf_url: contract.pdfUrl || null,
+    summary: contract.summary,
+    created_at: contract.createdAt,
+  })
+}
+
+export async function deleteContractFromDB(id: string): Promise<void> {
+  await getClient().from('contracts').delete().eq('id', id)
 }

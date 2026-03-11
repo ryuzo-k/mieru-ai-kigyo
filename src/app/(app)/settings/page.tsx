@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Eye, EyeOff, Save, Trash2, CheckCircle, Link } from 'lucide-react'
+import { Eye, EyeOff, Save, Trash2, CheckCircle, Link, BarChart2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,7 +33,7 @@ import {
   getWordPressConfig,
   saveWordPressConfig,
 } from '@/lib/storage'
-import { getStoreFromDB, saveStoreToDB } from '@/lib/db'
+import { getStoreFromDB, saveStoreToDB, getGoogleTokenFromDB } from '@/lib/db'
 import { useCompany } from '@/context/company-context'
 import { ApiKeys, StoreInfo, BusinessType, WordPressConfig } from '@/types'
 import { useRouter } from 'next/navigation'
@@ -110,6 +110,12 @@ export default function SettingsPage() {
   const [wpSaved, setWpSaved] = useState(false)
   const [wpTesting, setWpTesting] = useState(false)
   const [wpTestResult, setWpTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [ga4MeasurementId, setGa4MeasurementId] = useState('')
+  const [ga4Saved, setGa4Saved] = useState(false)
+  const [ga4TestResult, setGa4TestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [googleConnected, setGoogleConnected] = useState(false)
+  const [googleEmail, setGoogleEmail] = useState('')
+  const [googleMsg, setGoogleMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     setApiKeys(getApiKeys())
@@ -118,7 +124,29 @@ export default function SettingsPage() {
     getStoreFromDB(companyId).then((s) => {
       setStore(s)
       setEditStore(s || {})
+      setGa4MeasurementId(s?.ga4MeasurementId || '')
     }).catch(() => {})
+    // Check Google token from DB
+    getGoogleTokenFromDB(companyId).then(({ accessToken, email }) => {
+      if (accessToken) {
+        setGoogleConnected(true)
+        setGoogleEmail(email || '')
+      }
+    }).catch(() => {})
+    // Handle OAuth redirect params
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('google_connected') === 'true') {
+        const email = params.get('email') || ''
+        setGoogleConnected(true)
+        setGoogleEmail(email)
+        setGoogleMsg({ ok: true, text: `Google連携が完了しました${email ? `（${email}）` : ''}` })
+        window.history.replaceState({}, '', window.location.pathname)
+      } else if (params.get('google_error')) {
+        setGoogleMsg({ ok: false, text: `Google連携エラー: ${params.get('google_error')}` })
+        window.history.replaceState({}, '', window.location.pathname)
+      }
+    }
   }, [companyId])
 
   const handleSaveApiKey = (key: keyof ApiKeys) => {
@@ -177,6 +205,28 @@ export default function SettingsPage() {
       setWpTestResult({ ok: false, message: 'ネットワークエラーが発生しました。URLを確認してください' })
     } finally {
       setWpTesting(false)
+    }
+  }
+
+  const handleSaveGa4 = async () => {
+    if (!store) return
+    const updated = { ...store, ga4MeasurementId, updatedAt: new Date().toISOString() } as StoreInfo
+    await saveStoreToDB(updated, companyId)
+    setStore(updated)
+    setGa4Saved(true)
+    setTimeout(() => setGa4Saved(false), 2000)
+  }
+
+  const handleTestGa4 = () => {
+    const pattern = /^G-[A-Z0-9]{6,}$/
+    if (!ga4MeasurementId.trim()) {
+      setGa4TestResult({ ok: false, message: 'Measurement IDを入力してください' })
+      return
+    }
+    if (pattern.test(ga4MeasurementId.trim())) {
+      setGa4TestResult({ ok: true, message: '形式が正しいです（G-XXXXXXXXXX形式）' })
+    } else {
+      setGa4TestResult({ ok: false, message: '形式が正しくありません。G-XXXXXXXXXX形式で入力してください' })
     }
   }
 
@@ -293,6 +343,62 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Google Connection */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Google 連携</CardTitle>
+          <CardDescription>
+            提案資料をGoogleスライドに直接書き出せます
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {googleConnected ? (
+            <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+              <CheckCircle className="h-4 w-4 shrink-0" />
+              連携済み{googleEmail ? `（${googleEmail}）` : ''}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Googleアカウント連携</p>
+                <p className="text-xs text-muted-foreground">
+                  提案資料をGoogleスライドに書き出せるようになります
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  window.location.href = `/api/auth/google?companyId=${encodeURIComponent(companyId)}`
+                }}
+              >
+                <Link className="h-4 w-4 mr-2" />
+                Googleアカウントで連携
+              </Button>
+            </div>
+          )}
+          {googleConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                window.location.href = `/api/auth/google?companyId=${encodeURIComponent(companyId)}`
+              }}
+            >
+              <Link className="h-4 w-4 mr-2" />
+              別のアカウントで再連携
+            </Button>
+          )}
+          {googleMsg && (
+            <p className={`text-xs px-2 py-1.5 rounded ${googleMsg.ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+              {googleMsg.text}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground bg-muted p-2 rounded">
+            スコープ: Google Slides（プレゼン作成のみ）。環境変数 GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET が必要です。
+          </p>
+        </CardContent>
+      </Card>
+
       {/* WordPress Integration */}
       <Card>
         <CardHeader>
@@ -366,6 +472,60 @@ export default function SettingsPage() {
             </Button>
             <Button onClick={handleSaveWordPress} className="flex-1">
               {wpSaved ? (
+                <><CheckCircle className="h-4 w-4 mr-2 text-green-300" />保存しました</>
+              ) : (
+                <><Save className="h-4 w-4 mr-2" />設定を保存</>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* GA4 Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart2 className="h-5 w-5" />
+            GA4設定
+          </CardTitle>
+          <CardDescription>
+            Google Analytics 4でAI経由の流入を計測できます
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="ga4-measurement-id">Measurement ID</Label>
+            <Input
+              id="ga4-measurement-id"
+              placeholder="G-XXXXXXXXXX"
+              value={ga4MeasurementId}
+              onChange={(e) => {
+                setGa4MeasurementId(e.target.value)
+                setGa4TestResult(null)
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              GA4管理画面 → データストリーム → ウェブストリーム詳細 から確認できます
+            </p>
+          </div>
+          {ga4TestResult && (
+            <div className={`rounded-md border px-3 py-2 text-sm ${ga4TestResult.ok ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+              {ga4TestResult.message}
+            </div>
+          )}
+          <div className="rounded-md bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700 space-y-1">
+            <p className="font-medium">AI経由流入の確認方法</p>
+            <p>GA4でsource/mediumに <code className="bg-blue-100 px-1 rounded">perplexity.ai</code>、<code className="bg-blue-100 px-1 rounded">claude.ai</code>、<code className="bg-blue-100 px-1 rounded">chatgpt.com</code> 等が含まれるセッションがAI流入です。</p>
+            <p>GA4 → レポート → 集客 → トラフィック獲得 → セッションのデフォルトチャンネルグループ で確認できます。</p>
+          </div>
+          <Separator />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleTestGa4} className="flex-1">
+              <Link className="h-4 w-4 mr-2" />
+              GA4接続テスト
+            </Button>
+            <Button onClick={handleSaveGa4} disabled={!store} className="flex-1">
+              {ga4Saved ? (
                 <><CheckCircle className="h-4 w-4 mr-2 text-green-300" />保存しました</>
               ) : (
                 <><Save className="h-4 w-4 mr-2" />設定を保存</>

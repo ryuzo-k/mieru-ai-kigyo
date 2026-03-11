@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import {
   Globe,
@@ -12,6 +13,8 @@ import {
   Upload,
   CheckCircle,
   AlertTriangle,
+  Copy,
+  Search,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +23,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { getApiKeys, getWordPressConfig } from '@/lib/storage'
+import { WebsiteIssue } from '@/types'
 
 // Monaco Editorは動的インポート（SSR無効）
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
@@ -75,9 +79,71 @@ function DiffBlock({ original, modified }: { original: string; modified: string 
   )
 }
 
+// ─── Code Block with Copy ───────────────────────────────────────────────────
+
+function CodeBlockWithCopy({ code, label }: { code: string; label?: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+  return (
+    <div className="relative group rounded-md overflow-hidden border">
+      {label && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-slate-800 border-b border-slate-700">
+          <span className="text-xs text-slate-400">{label}</span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-2 text-xs text-slate-300 hover:text-white hover:bg-slate-700"
+            onClick={handleCopy}
+          >
+            {copied ? <CheckCircle className="h-3 w-3 mr-1 text-green-400" /> : <Copy className="h-3 w-3 mr-1" />}
+            {copied ? 'コピー済み' : 'コピー'}
+          </Button>
+        </div>
+      )}
+      {!label && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="absolute top-2 right-2 h-6 px-2 text-xs opacity-0 group-hover:opacity-100 bg-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-700 z-10"
+          onClick={handleCopy}
+        >
+          {copied ? <CheckCircle className="h-3 w-3 mr-1 text-green-400" /> : <Copy className="h-3 w-3 mr-1" />}
+          {copied ? 'コピー済み' : 'コピー'}
+        </Button>
+      )}
+      <pre className="text-xs font-mono overflow-auto bg-slate-900 p-3 text-slate-100 max-h-48 whitespace-pre-wrap">
+        {code}
+      </pre>
+    </div>
+  )
+}
+
+// ─── Priority badge ─────────────────────────────────────────────────────────
+
+const priorityConfig = {
+  critical: { label: '重大', className: 'bg-red-100 text-red-700 border-red-200' },
+  high: { label: '高', className: 'bg-orange-100 text-orange-700 border-orange-200' },
+  medium: { label: '中', className: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+}
+
+const categoryLabels: Record<WebsiteIssue['category'], string> = {
+  metadata: 'メタデータ',
+  structured_data: '構造化データ',
+  content: 'コンテンツ',
+  internal_links: '内部リンク',
+  trust: '著者・信頼性',
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────
 
 export default function WebsitePage() {
+  const searchParams = useSearchParams()
+  const companyId = searchParams.get('company') || 'company_default'
+
   const [url, setUrl] = useState('')
   const [htmlCode, setHtmlCode] = useState('')
   const [originalHtml, setOriginalHtml] = useState('')
@@ -93,6 +159,11 @@ export default function WebsitePage() {
 
   const [wpUploading, setWpUploading] = useState(false)
   const [wpResult, setWpResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const [rightTab, setRightTab] = useState<'chat' | 'analysis'>('chat')
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisIssues, setAnalysisIssues] = useState<WebsiteIssue[] | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
   const chatEndRef = useRef<HTMLDivElement>(null)
 
@@ -117,6 +188,7 @@ export default function WebsitePage() {
     setScrapeError(null)
     setPendingCode(null)
     setMessages([])
+    setAnalysisIssues(null)
     try {
       const res = await fetch('/api/scrape', {
         method: 'POST',
@@ -133,6 +205,36 @@ export default function WebsitePage() {
       setScrapeError(err instanceof Error ? err.message : 'エラーが発生しました')
     } finally {
       setScraping(false)
+    }
+  }
+
+  // ── AI Analyze ────────────────────────────────────────────────────────────
+
+  const handleAnalyze = async () => {
+    if (!htmlCode || analyzing) return
+    setAnalyzing(true)
+    setAnalysisError(null)
+    setRightTab('analysis')
+    try {
+      const res = await fetch('/api/analyze-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url,
+          scrapedContent: htmlCode,
+          storeName: companyId,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || '分析に失敗しました')
+      }
+      const data = await res.json()
+      setAnalysisIssues(data.issues || [])
+    } catch (err) {
+      setAnalysisError(err instanceof Error ? err.message : '分析に失敗しました')
+    } finally {
+      setAnalyzing(false)
     }
   }
 
@@ -275,6 +377,18 @@ ${htmlCode}
             {scraping ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             <span className="ml-1">{scraping ? '取得中...' : '取得'}</span>
           </Button>
+          {hasHtml && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              className="shrink-0"
+            >
+              {analyzing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Search className="h-4 w-4 mr-1" />}
+              AI診断
+            </Button>
+          )}
         </div>
         {wpConfig.connected && hasHtml && (
           <Button
@@ -354,89 +468,169 @@ ${htmlCode}
           </Tabs>
         </div>
 
-        {/* Right: AI Chat */}
+        {/* Right: Chat + Analysis tabs */}
         <div className="flex flex-col w-1/2 overflow-hidden">
           <div className="px-3 py-2 border-b shrink-0 flex items-center gap-2">
-            <span className="text-sm font-medium">AIアシスタント</span>
-            <Badge variant="secondary" className="text-xs">GEO改善</Badge>
+            <button
+              className={`text-sm font-medium px-2 py-1 rounded transition-colors ${rightTab === 'chat' ? 'bg-muted' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setRightTab('chat')}
+            >
+              AIチャット
+            </button>
+            <button
+              className={`text-sm font-medium px-2 py-1 rounded transition-colors flex items-center gap-1 ${rightTab === 'analysis' ? 'bg-muted' : 'text-muted-foreground hover:text-foreground'}`}
+              onClick={() => setRightTab('analysis')}
+            >
+              診断結果
+              {analysisIssues && (
+                <Badge variant="secondary" className="text-xs h-4 px-1">{analysisIssues.length}</Badge>
+              )}
+            </button>
           </div>
 
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {messages.length === 0 && (
-              <div className="text-center text-muted-foreground text-sm py-8">
-                <p className="font-medium mb-1">AIにGEO改善を依頼できます</p>
-                <p className="text-xs">例: 「Schema.orgの構造化データを追加してください」</p>
-                <p className="text-xs mt-1">「FAQセクションを追加してGEO最適化してください」</p>
-                <p className="text-xs mt-1">「E-E-A-T向上のためのコンテンツ改善提案をください」</p>
+          {/* Chat panel */}
+          {rightTab === 'chat' && (
+            <>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                {messages.length === 0 && (
+                  <div className="text-center text-muted-foreground text-sm py-8">
+                    <p className="font-medium mb-1">AIにGEO改善を依頼できます</p>
+                    <p className="text-xs">例: 「Schema.orgの構造化データを追加してください」</p>
+                    <p className="text-xs mt-1">「FAQセクションを追加してGEO最適化してください」</p>
+                    <p className="text-xs mt-1">「E-E-A-T向上のためのコンテンツ改善提案をください」</p>
+                  </div>
+                )}
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div
+                      className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-foreground'
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {aiLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-lg px-3 py-2 text-sm flex items-center gap-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      考え中...
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
               </div>
-            )}
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-                    msg.role === 'user'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-foreground'
-                  }`}
-                >
-                  {msg.content}
-                </div>
-              </div>
-            ))}
-            {aiLoading && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-3 py-2 text-sm flex items-center gap-2">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  考え中...
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
 
-          {/* Pending code diff */}
-          {pendingCode && (
-            <div className="px-3 py-2 border-t border-b bg-slate-50 space-y-2 shrink-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-700">AIが提案するコード変更</span>
-                <Button size="sm" onClick={handleApplyCode} className="h-7 text-xs">
-                  <CheckCircle className="h-3.5 w-3.5 mr-1" />
-                  適用する
-                </Button>
+              {/* Pending code diff */}
+              {pendingCode && (
+                <div className="px-3 py-2 border-t border-b bg-slate-50 space-y-2 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-slate-700">AIが提案するコード変更</span>
+                    <Button size="sm" onClick={handleApplyCode} className="h-7 text-xs">
+                      <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                      適用する
+                    </Button>
+                  </div>
+                  <DiffBlock original={originalHtml} modified={pendingCode} />
+                </div>
+              )}
+
+              {/* Input */}
+              <div className="p-3 border-t shrink-0">
+                <div className="flex gap-2">
+                  <Textarea
+                    placeholder={hasHtml ? 'GEO改善の指示を入力（例: 構造化データを追加して）' : 'まずURLを取得してください'}
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      }
+                    }}
+                    disabled={!hasHtml || aiLoading}
+                    rows={3}
+                    className="resize-none text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSendMessage}
+                    disabled={!hasHtml || !userInput.trim() || aiLoading}
+                    className="shrink-0 self-end"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Enterで送信 / Shift+Enterで改行</p>
               </div>
-              <DiffBlock original={originalHtml} modified={pendingCode} />
-            </div>
+            </>
           )}
 
-          {/* Input */}
-          <div className="p-3 border-t shrink-0">
-            <div className="flex gap-2">
-              <Textarea
-                placeholder={hasHtml ? 'GEO改善の指示を入力（例: 構造化データを追加して）' : 'まずURLを取得してください'}
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage()
-                  }
-                }}
-                disabled={!hasHtml || aiLoading}
-                rows={3}
-                className="resize-none text-sm"
-              />
-              <Button
-                size="sm"
-                onClick={handleSendMessage}
-                disabled={!hasHtml || !userInput.trim() || aiLoading}
-                className="shrink-0 self-end"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
+          {/* Analysis panel */}
+          {rightTab === 'analysis' && (
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {analyzing && (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <p className="text-sm">AIがウェブサイトを診断中...</p>
+                </div>
+              )}
+              {analysisError && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{analysisError}</AlertDescription>
+                </Alert>
+              )}
+              {!analyzing && !analysisIssues && !analysisError && (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm">
+                  <Search className="h-10 w-10 opacity-20" />
+                  <p>URLを取得後「AI診断」ボタンを押してください</p>
+                </div>
+              )}
+              {analysisIssues && analysisIssues.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm">
+                  <CheckCircle className="h-10 w-10 opacity-40 text-green-500" />
+                  <p>改善点は見つかりませんでした</p>
+                </div>
+              )}
+              {analysisIssues && analysisIssues.map((issue) => (
+                <div key={issue.id} className="rounded-lg border bg-card space-y-3 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded border ${priorityConfig[issue.priority]?.className || ''}`}>
+                          {priorityConfig[issue.priority]?.label || issue.priority}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {categoryLabels[issue.category] || issue.category}
+                        </Badge>
+                      </div>
+                      <p className="text-sm font-medium">{issue.issue}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{issue.explanation}</p>
+                  {issue.estimatedImpact && (
+                    <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">
+                      期待効果: {issue.estimatedImpact}
+                    </p>
+                  )}
+                  {issue.currentCode && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">現在のコード</p>
+                      <CodeBlockWithCopy code={issue.currentCode} />
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground mb-1">修正後のコード</p>
+                    <CodeBlockWithCopy code={issue.fixedCode} label="修正コード（コピーして使用）" />
+                  </div>
+                </div>
+              ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Enterで送信 / Shift+Enterで改行</p>
-          </div>
+          )}
         </div>
       </div>
     </div>
