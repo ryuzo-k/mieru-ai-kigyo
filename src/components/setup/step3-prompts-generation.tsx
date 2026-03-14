@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Loader2,
   Star,
@@ -9,6 +9,10 @@ import {
   AlertCircle,
   RefreshCw,
   BarChart2,
+  Upload,
+  X,
+  FileText,
+  File,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +29,13 @@ interface Props {
   storeInfo: StoreInfo
   onComplete: (prompts: Prompt[]) => void
   onBack: () => void
+}
+
+interface UploadedFile {
+  name: string
+  type: 'pdf' | 'text' | 'word'
+  base64?: string
+  text?: string
 }
 
 const categoryLabels: Record<PromptCategory, string> = {
@@ -53,6 +64,27 @@ const difficultyLabels: Record<string, string> = {
 
 const WINNING_TOP_N = 20
 
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1])
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = reject
+    reader.readAsText(file, 'UTF-8')
+  })
+}
+
 export function Step3PromptsGeneration({ storeInfo, onComplete, onBack }: Props) {
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [generating, setGenerating] = useState(false)
@@ -67,10 +99,57 @@ export function Step3PromptsGeneration({ storeInfo, onComplete, onBack }: Props)
   const [measureCurrent, setMeasureCurrent] = useState(0)
   const [displayRates, setDisplayRates] = useState<Record<string, number>>({}) // promptId -> %
 
+  // ファイルアップロード状態
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   useEffect(() => {
     handleGenerate()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const processFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files)
+    const newFiles: UploadedFile[] = []
+
+    for (const file of fileArray) {
+      if (file.type === 'application/pdf') {
+        const base64 = await readFileAsBase64(file)
+        newFiles.push({ name: file.name, type: 'pdf', base64 })
+      } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        const text = await readFileAsText(file)
+        newFiles.push({ name: file.name, type: 'text', text })
+      } else if (
+        file.name.endsWith('.docx') ||
+        file.type.includes('wordprocessingml') ||
+        file.type === 'application/msword'
+      ) {
+        newFiles.push({ name: file.name, type: 'word' })
+      }
+    }
+
+    setUploadedFiles((prev) => [...prev, ...newFiles])
+  }, [])
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = () => setIsDragging(false)
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    if (e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files)
+    }
+  }
+
+  const removeFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index))
+  }
 
   const handleGenerate = async () => {
     setGenerating(true)
@@ -79,10 +158,19 @@ export function Step3PromptsGeneration({ storeInfo, onComplete, onBack }: Props)
     setMeasureDone(false)
     setDisplayRates({})
     try {
+      const filesPayload = uploadedFiles
+        .filter((f) => f.type !== 'word')
+        .map((f) => ({
+          name: f.name,
+          type: f.type,
+          ...(f.base64 ? { base64: f.base64 } : {}),
+          ...(f.text ? { text: f.text } : {}),
+        }))
+
       const res = await fetch('/api/generate-prompts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store: storeInfo }),
+        body: JSON.stringify({ store: storeInfo, files: filesPayload }),
       })
       const data = await res.json()
       if (data.error) {
@@ -204,6 +292,89 @@ export function Step3PromptsGeneration({ storeInfo, onComplete, onBack }: Props)
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
+        {/* ファイルアップロードエリア */}
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-muted-foreground">
+            参考資料を追加（任意）
+            <span className="ml-1 font-normal">— 会社案内・サービス資料などを添付するとより精度が上がります</span>
+          </p>
+
+          <div
+            className={cn(
+              'rounded-lg border-2 border-dashed p-4 transition-colors cursor-pointer',
+              isDragging
+                ? 'border-primary bg-primary/5'
+                : 'border-muted-foreground/25 hover:border-muted-foreground/50 hover:bg-muted/30'
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.docx"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) {
+                  processFiles(e.target.files)
+                  e.target.value = ''
+                }
+              }}
+            />
+            <div className="flex flex-col items-center gap-1.5 text-center">
+              <Upload className="h-6 w-6 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">
+                ドラッグ＆ドロップ、またはクリックしてファイルを選択
+              </p>
+              <p className="text-xs text-muted-foreground">PDF・Word・テキスト（複数可）</p>
+            </div>
+          </div>
+
+          {/* アップロードファイル一覧 */}
+          {uploadedFiles.length > 0 && (
+            <ul className="space-y-1.5">
+              {uploadedFiles.map((f, i) => (
+                <li
+                  key={i}
+                  className={cn(
+                    'flex items-start gap-2 rounded-md border px-3 py-2 text-sm',
+                    f.type === 'word' ? 'border-amber-200 bg-amber-50' : 'bg-muted/40'
+                  )}
+                >
+                  {f.type === 'pdf' ? (
+                    <File className="h-4 w-4 mt-0.5 shrink-0 text-red-500" />
+                  ) : f.type === 'text' ? (
+                    <FileText className="h-4 w-4 mt-0.5 shrink-0 text-blue-500" />
+                  ) : (
+                    <FileText className="h-4 w-4 mt-0.5 shrink-0 text-amber-500" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate font-medium">{f.name}</p>
+                    {f.type === 'word' && (
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Wordファイルはテキスト変換できないため、テキストファイルかPDFに変換してからアップロードしてください
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeFile(i)
+                    }}
+                    className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={`${f.name}を削除`}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         {/* バッチ計測中プログレス */}
         {measuring && (

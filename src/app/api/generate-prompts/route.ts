@@ -9,13 +9,24 @@ const industryTypeLabel: Record<string, string> = {
   other: 'IT・SaaS',
 }
 
+interface UploadedFile {
+  name: string
+  type: 'pdf' | 'text'
+  base64?: string
+  text?: string
+}
+
 function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { store, apiKey: clientApiKey }: { store: StoreInfo; apiKey?: string } = await request.json()
+    const {
+      store,
+      apiKey: clientApiKey,
+      files,
+    }: { store: StoreInfo; apiKey?: string; files?: UploadedFile[] } = await request.json()
 
     if (!store) {
       return NextResponse.json(
@@ -80,6 +91,12 @@ export async function POST(request: NextRequest) {
   ]
 }`
 
+    // テキストファイルの内容を userPrompt に結合
+    const textFileContents = (files || [])
+      .filter((f) => f.type === 'text' && f.text)
+      .map((f) => `【参考資料: ${f.name}】\n${f.text}`)
+      .join('\n\n')
+
     const userPrompt = `以下の企業のGEO計測用プロンプトを生成してください。
 
 企業名: ${store.name}${brandName !== store.name ? `\nブランド名: ${brandName}` : ''}
@@ -96,6 +113,7 @@ ${(store as unknown as Record<string, unknown>).targetPersona ? `ターゲット
 ${(store as unknown as Record<string, unknown>).userJourneyStages ? `ユーザージャーニー: ${(store as unknown as Record<string, unknown>).userJourneyStages}` : ''}
 ${(store as unknown as Record<string, unknown>).brandDocuments ? `ブランド資料・追加情報:
 ${String((store as unknown as Record<string, unknown>).brandDocuments).substring(0, 2000)}` : ''}
+${textFileContents ? `\n追加参考資料:\n${textFileContents.substring(0, 3000)}` : ''}
 
 【重要】
 - awareness カテゴリは上記のユーザージャーニー・ターゲットペルソナをベースに、実際に入力される質問を想定すること
@@ -104,18 +122,34 @@ ${String((store as unknown as Record<string, unknown>).brandDocuments).substring
 - ${brandName}が推薦・言及されるポテンシャルがある質問を選ぶこと
 - 企業名を直接含むプロンプトは reputation カテゴリのみにすること（awareness は企業名なしの一般質問）`
 
+    // PDFファイルをClaude documentコンテンツブロックに変換
+    const pdfFiles = (files || []).filter((f) => f.type === 'pdf' && f.base64)
+    const messageContent: unknown[] = [
+      ...pdfFiles.map((f) => ({
+        type: 'document',
+        source: {
+          type: 'base64',
+          media_type: 'application/pdf',
+          data: f.base64,
+        },
+        title: f.name,
+      })),
+      { type: 'text', text: userPrompt },
+    ]
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'pdfs-2024-09-25',
       },
       body: JSON.stringify({
         model: 'claude-opus-4-6',
         max_tokens: 8000,
         system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
+        messages: [{ role: 'user', content: messageContent }],
       }),
     })
 
