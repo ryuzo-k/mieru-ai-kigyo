@@ -62,15 +62,18 @@ export interface Prompt {
   isWinning: boolean
   pseudoMemory: string
   displayRate?: number  // 表示率（0-100%）
+  sentiment?: 'positive' | 'neutral' | 'negative'  // センチメント分析結果
   citedSources?: string[]  // AIが引用したURL/情報源
   citedCompetitors?: string[]  // 引用された競合名
   citedContext?: string  // AIがどういう文脈で言及したか
+  topic?: string  // トピック名（例：「課題認識」「サービス比較」等）
+  topicOrder?: number  // トピック内の順序
   createdAt: string
   updatedAt: string
 }
 
 // 計測プラットフォーム
-export type Platform = 'claude' | 'gemini' | 'chatgpt' | 'perplexity'
+export type Platform = 'claude' | 'gemini' | 'chatgpt' | 'perplexity' | 'google_ai_overviews' | 'google_ai_mode'
 
 // センチメント
 export type Sentiment = 'positive' | 'neutral' | 'negative'
@@ -93,6 +96,14 @@ export interface MeasurementResult {
   competitorRankings?: {name: string; rank: number; snippet: string}[]  // 競合の出現順位
   rawResponses?: string[]  // 3回分の実際のAI回答
   displayRate?: number  // 3回計測の表示率%
+  mentionRank?: number | null  // 推薦リスト内の順位（1始まり）。言及なしの場合null
+  fanoutQueries?: string[]  // AIが生成したフォローアップ質問
+  citedSourcesWithFavicons?: {  // 引用ソース（ファビコン付き）
+    url: string
+    domain: string
+    title?: string
+  }[]
+  triggered?: boolean  // AIが回答を生成したか（Google AI Overviews用・将来対応、今はtrue固定）
   measuredAt: string
 }
 
@@ -177,6 +188,7 @@ export interface ApiKeys {
   gemini: string
   perplexity: string
   firecrawl: string
+  serpapi: string
 }
 
 // WordPress連携設定

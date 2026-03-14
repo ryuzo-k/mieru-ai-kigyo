@@ -28,6 +28,7 @@ const defaultStore: AppStore = {
     gemini: '',
     perplexity: '',
     firecrawl: '',
+    serpapi: '',
   },
   gmailConfig: {
     connected: false,

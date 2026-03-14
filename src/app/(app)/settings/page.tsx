@@ -78,6 +78,12 @@ const apiKeyFields: ApiKeyField[] = [
     placeholder: 'fc-...',
     description: 'ウェブサイトのスクレイピングに使用します',
   },
+  {
+    key: 'serpapi',
+    label: 'SerpApi API Key',
+    placeholder: '8f817d...',
+    description: 'Google AI Overviews と Google AI Mode の計測に使用（serpapi.com）',
+  },
 ]
 
 const businessTypeLabels: Record<BusinessType, string> = {
@@ -97,6 +103,7 @@ export default function SettingsPage() {
     gemini: '',
     perplexity: '',
     firecrawl: '',
+    serpapi: '',
   })
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
   const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({})

@@ -20,13 +20,150 @@ function generateId(): string {
   return Math.random().toString(36).substring(2) + Date.now().toString(36)
 }
 
+const MEASURE_TIMES = 3
+const BATCH_SIZE = 5
+const TIMEOUT_MS = 10000
+
+async function measureOpenAIOnce(promptText: string, apiKey: string): Promise<string> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-search-preview',
+        max_tokens: 8000,
+        web_search_options: {},
+        messages: [
+          {
+            role: 'system',
+            content:
+              '必ず日本語で回答してください。質問でおすすめの会社・サービスを聞かれている場合は、具体的な会社名・サービス名を必ず複数列挙してください。抽象的な説明だけで終わらないこと。',
+          },
+          { role: 'user', content: promptText },
+        ],
+      }),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (!res.ok) {
+      // Fallback to gpt-4o-mini without search
+      const res2 = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          max_tokens: 8000,
+          messages: [{ role: 'user', content: promptText }],
+        }),
+      })
+      if (!res2.ok) return ''
+      const d2 = await res2.json()
+      return d2.choices[0]?.message?.content || ''
+    }
+    const data = await res.json()
+    return data.choices[0]?.message?.content || ''
+  } catch {
+    clearTimeout(timer)
+    return ''
+  }
+}
+
+async function analyzeSentiment(
+  response: string,
+  storeName: string,
+  apiKey: string
+): Promise<'positive' | 'neutral' | 'negative' | undefined> {
+  try {
+    const sentimentPrompt = `以下のAI回答を分析してください。
+対象企業: "${storeName}"
+
+AI回答:
+${response}
+
+以下のJSONのみで返してください：
+{
+  "sentiment": "positive" | "neutral" | "negative",
+  "reason": "判定理由を1文で"
+}`
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: sentimentPrompt }],
+      }),
+    })
+    if (!res.ok) return undefined
+    const data = await res.json()
+    const text: string = data.choices[0]?.message?.content || ''
+    const match = text.match(/\{[\s\S]*\}/)
+    if (!match) return undefined
+    const parsed = JSON.parse(match[0]) as { sentiment?: string }
+    const s = parsed.sentiment
+    if (s === 'positive' || s === 'neutral' || s === 'negative') return s
+    return undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function measurePromptWithOpenAI(
+  prompt: Prompt,
+  storeName: string,
+  brandName: string,
+  apiKey: string
+): Promise<{ displayRate: number; isWinning: boolean; sentiment?: 'positive' | 'neutral' | 'negative' }> {
+  let mentionCount = 0
+  let bestResponse: string | undefined
+  for (let i = 0; i < MEASURE_TIMES; i++) {
+    try {
+      const response = await measureOpenAIOnce(prompt.text, apiKey)
+      if (response) {
+        const lowerResponse = response.toLowerCase()
+        const mentioned =
+          lowerResponse.includes(storeName.toLowerCase()) ||
+          (brandName !== storeName && lowerResponse.includes(brandName.toLowerCase()))
+        if (mentioned) {
+          mentionCount++
+          if (!bestResponse) bestResponse = response
+        }
+      }
+    } catch {
+      // continue on error
+    }
+  }
+  const displayRate = Math.round((mentionCount / MEASURE_TIMES) * 100)
+
+  let sentiment: 'positive' | 'neutral' | 'negative' | undefined
+  if (bestResponse) {
+    sentiment = await analyzeSentiment(bestResponse, storeName, apiKey)
+  }
+
+  const isWinning = displayRate >= 33 && (sentiment === 'positive' || sentiment === 'neutral')
+  return { displayRate, isWinning, sentiment }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const {
       store,
       apiKey: clientApiKey,
+      openaiApiKey: clientOpenaiKey,
       files,
-    }: { store: StoreInfo; apiKey?: string; files?: UploadedFile[] } = await request.json()
+    }: { store: StoreInfo; apiKey?: string; openaiApiKey?: string; files?: UploadedFile[] } =
+      await request.json()
 
     if (!store) {
       return NextResponse.json(
@@ -189,7 +326,43 @@ ${textFileContents ? `\n追加参考資料:\n${textFileContents.substring(0, 300
       updatedAt: now,
     }))
 
-    return NextResponse.json({ prompts })
+    // ── Auto-measure with OpenAI ──────────────────────────────────────────
+    const openaiApiKey = clientOpenaiKey || process.env.OPENAI_API_KEY
+    let autoMeasured = false
+
+    if (openaiApiKey) {
+      try {
+        autoMeasured = true
+        const storeName = store.name
+        const brand = store.brandName || store.name
+
+        for (let i = 0; i < prompts.length; i += BATCH_SIZE) {
+          const batch = prompts.slice(i, i + BATCH_SIZE)
+          const results = await Promise.all(
+            batch.map((p) => measurePromptWithOpenAI(p, storeName, brand, openaiApiKey))
+          )
+          results.forEach((result, j) => {
+            prompts[i + j].displayRate = result.displayRate
+            prompts[i + j].isWinning = result.isWinning
+            prompts[i + j].sentiment = result.sentiment
+          })
+        }
+      } catch {
+        // 計測失敗してもプロンプト生成結果は返す
+        autoMeasured = false
+      }
+    }
+
+    const stats = {
+      total: prompts.length,
+      measured: prompts.filter((p) => p.displayRate !== undefined).length,
+      winning: prompts.filter((p) => p.isWinning).length,
+      positiveCount: prompts.filter((p) => p.sentiment === 'positive').length,
+      neutralCount: prompts.filter((p) => p.sentiment === 'neutral').length,
+      negativeCount: prompts.filter((p) => p.sentiment === 'negative').length,
+    }
+
+    return NextResponse.json({ prompts, autoMeasured, stats })
   } catch (error) {
     console.error('Generate prompts error:', error)
     return NextResponse.json(

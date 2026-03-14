@@ -57,13 +57,15 @@ import { PromptDetailPanel } from '@/components/analytics/PromptDetailPanel'
 // Constants
 // ────────────────────────────────────────────────────────────────────────────
 
-const PLATFORM_LIST: Platform[] = ['claude', 'gemini', 'chatgpt', 'perplexity']
+const PLATFORM_LIST: Platform[] = ['claude', 'gemini', 'chatgpt', 'perplexity', 'google_ai_overviews', 'google_ai_mode']
 
 const platformLabels: Record<Platform, string> = {
   claude: 'Claude',
   gemini: 'Gemini',
   chatgpt: 'ChatGPT',
   perplexity: 'Perplexity',
+  google_ai_overviews: 'Google AI Overviews',
+  google_ai_mode: 'Google AI Mode',
 }
 
 const platformColors: Record<Platform, string> = {
@@ -71,6 +73,8 @@ const platformColors: Record<Platform, string> = {
   gemini: 'bg-blue-50 border-blue-200 text-blue-700',
   chatgpt: 'bg-green-50 border-green-200 text-green-700',
   perplexity: 'bg-purple-50 border-purple-200 text-purple-700',
+  google_ai_overviews: 'bg-blue-50 border-blue-300 text-blue-800',
+  google_ai_mode: 'bg-cyan-50 border-cyan-200 text-cyan-700',
 }
 
 const sentimentLabels: Record<Sentiment, string> = {
@@ -220,6 +224,8 @@ export default function AnalyticsPage() {
     gemini: true,  // サーバー側で GOOGLE_GEMINI_API_KEY を使用
     chatgpt: true, // サーバー側で OPENAI_API_KEY を使用
     perplexity: true, // サーバー側で PERPLEXITY_API_KEY を使用
+    google_ai_overviews: !!apiKeys.serpapi,
+    google_ai_mode: !!apiKeys.serpapi,
   }
 
   // All prompts (sorted: winning first, then by display rate desc)
@@ -271,6 +277,15 @@ export default function AnalyticsPage() {
   const winningCount = prompts.filter((p) => p.isWinning).length
   const hasData = totalMeasured > 0
 
+  // Average mention rank (only from results that have a rank)
+  const rankedResults = allResults.filter((r) => typeof r.mentionRank === 'number' && r.mentionRank !== null)
+  const avgMentionRank = rankedResults.length > 0
+    ? rankedResults.reduce((sum, r) => sum + (r.mentionRank as number), 0) / rankedResults.length
+    : null
+
+  // Total fanout queries count
+  const totalFanoutCount = allResults.reduce((sum, r) => sum + (r.fanoutQueries?.length ?? 0), 0)
+
   // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleMeasure = async () => {
@@ -287,11 +302,11 @@ export default function AnalyticsPage() {
         body: JSON.stringify({
           companyId,
           promptIds: measurablePrompts.map((p) => p.id),
-          platforms: ['claude', 'chatgpt', 'gemini', 'perplexity'],
+          platforms: PLATFORM_LIST.filter(p => platformAvailability[p]),
           storeName: store.name,
           brandName: store.brandName || '',
           competitors: store.competitors.map((c) => c.name),
-          apiKeys: {},
+          apiKeys: { serpapi: apiKeys.serpapi || '' },
         }),
       })
       const { jobId, total } = await res.json()
@@ -508,7 +523,7 @@ ${allStats
 
       {/* ── KPI Summary Cards ────────────────────────────────────────────── */}
       {hasData && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <Card>
             <CardContent className="py-4 px-4">
               <p className="text-xs text-muted-foreground mb-1">全体表示率</p>
@@ -545,6 +560,20 @@ ${allStats
             <CardContent className="py-4 px-4">
               <p className="text-xs text-muted-foreground mb-1">勝ち筋プロンプト</p>
               <p className="text-2xl font-bold text-primary">{winningCount}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4 px-4">
+              <p className="text-xs text-muted-foreground mb-1">Avg. Position</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {avgMentionRank !== null ? `#${avgMentionRank.toFixed(1)}` : '—'}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="py-4 px-4">
+              <p className="text-xs text-muted-foreground mb-1">Fanout Queries</p>
+              <p className="text-2xl font-bold text-violet-600">{totalFanoutCount}</p>
             </CardContent>
           </Card>
         </div>
@@ -678,7 +707,13 @@ ${allStats
                                   </TableCell>
                                   <TableCell>
                                     {results.length > 0 ? (
-                                      <MentionRateBar rate={mentionRate} />
+                                      results.every(r => r.triggered === false) ? (
+                                        <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500 border-gray-300">
+                                          Not Triggered
+                                        </Badge>
+                                      ) : (
+                                        <MentionRateBar rate={mentionRate} />
+                                      )
                                     ) : (
                                       <span className="text-xs text-muted-foreground">
                                         未計測
@@ -686,7 +721,7 @@ ${allStats
                                     )}
                                   </TableCell>
                                   <TableCell>
-                                    {results.length > 0 ? (
+                                    {results.length > 0 && !results.every(r => r.triggered === false) ? (
                                       <SentimentBadge sentiment={avgSentiment} />
                                     ) : (
                                       <span className="text-xs text-muted-foreground">

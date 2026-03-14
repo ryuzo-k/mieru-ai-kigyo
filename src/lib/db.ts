@@ -261,6 +261,7 @@ export async function getApiKeysFromDB(companyId: string = DEFAULT_COMPANY_ID): 
     gemini: data?.gemini || '',
     perplexity: data?.perplexity || '',
     firecrawl: data?.firecrawl || '',
+    serpapi: data?.serpapi || '',
   }
 }
 

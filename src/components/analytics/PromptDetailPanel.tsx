@@ -18,6 +18,39 @@ export function PromptDetailPanel({ promptText, result: r, storeName }: Props) {
         <CardTitle className="text-sm line-clamp-2">{promptText}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3 pb-4">
+        {/* Position + Fanout */}
+        {(typeof r.mentionRank === 'number' || (r.fanoutQueries && r.fanoutQueries.length > 0)) && (
+          <div className="flex gap-2 flex-wrap">
+            {typeof r.mentionRank === 'number' && (
+              <div className="flex items-center gap-1.5 rounded border border-blue-200 bg-blue-50 px-3 py-1.5">
+                <span className="text-xs font-medium text-blue-700">Position</span>
+                <span className="text-sm font-bold text-blue-800">#{r.mentionRank}</span>
+              </div>
+            )}
+            {r.fanoutQueries && r.fanoutQueries.length > 0 && (
+              <div className="flex items-center gap-1.5 rounded border border-violet-200 bg-violet-50 px-3 py-1.5">
+                <span className="text-xs font-medium text-violet-700">関連質問が生成されました:</span>
+                <span className="text-sm font-bold text-violet-800">{r.fanoutQueries.length}件</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fanout queries detail */}
+        {r.fanoutQueries && r.fanoutQueries.length > 0 && (
+          <div className="rounded bg-violet-50 border border-violet-200 px-3 py-2">
+            <p className="text-xs font-medium text-violet-700 mb-1.5">Fanout Queries（AIが生成した関連質問）</p>
+            <ul className="space-y-1">
+              {r.fanoutQueries.map((q, i) => (
+                <li key={i} className="text-xs text-violet-800 flex items-start gap-1.5">
+                  <span className="shrink-0 opacity-60">{i + 1}.</span>
+                  {q}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* センチメント */}
         <div className="flex gap-3 flex-wrap">
           {r.positiveElements && (

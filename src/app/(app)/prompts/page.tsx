@@ -11,6 +11,8 @@ import {
   Info,
   MessageSquare,
   Filter,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,10 +59,12 @@ import { Separator } from '@/components/ui/separator'
 import { Prompt, PromptCategory, PromptDifficulty, PromptPriority } from '@/types'
 import {
   generateId,
+  getApiKeys,
 } from '@/lib/storage'
-import { getPromptsFromDB, savePromptToDB, deletePromptFromDB } from '@/lib/db'
+import { getPromptsFromDB, savePromptToDB, deletePromptFromDB, getStoreFromDB } from '@/lib/db'
 import { useCompany } from '@/context/company-context'
 import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 
 // ---- constants ----
 const categoryLabels: Record<PromptCategory, string> = {
@@ -101,6 +105,7 @@ const priorityColors: Record<PromptPriority, string> = {
 
 // ---- types ----
 type FilterCategory = 'all' | PromptCategory
+type FilterTopic = 'all' | string
 
 interface PromptForm {
   text: string
@@ -108,6 +113,7 @@ interface PromptForm {
   difficulty: PromptDifficulty
   priority: PromptPriority
   pseudoMemory: string
+  topic: string
 }
 
 const defaultForm: PromptForm = {
@@ -116,6 +122,7 @@ const defaultForm: PromptForm = {
   difficulty: 'med',
   priority: 'medium',
   pseudoMemory: '',
+  topic: '',
 }
 
 // ---- component ----
@@ -124,15 +131,73 @@ export default function PromptsPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [search, setSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState<FilterCategory>('all')
+  const [filterTopic, setFilterTopic] = useState<FilterTopic>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<PromptForm>(defaultForm)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [formError, setFormError] = useState('')
+  const [autoGenerating, setAutoGenerating] = useState(false)
+  const [autoGenerateMessage, setAutoGenerateMessage] = useState('')
+  const [autoGenerateError, setAutoGenerateError] = useState('')
 
   useEffect(() => {
     getPromptsFromDB(companyId).then(setPrompts).catch(() => {})
   }, [companyId])
+
+  const handleAutoGenerate = async () => {
+    setAutoGenerating(true)
+    setAutoGenerateMessage('')
+    setAutoGenerateError('')
+    try {
+      const store = await getStoreFromDB(companyId)
+      if (!store) {
+        setAutoGenerateError('企業情報が見つかりません。先に企業情報を設定してください。')
+        return
+      }
+      const apiKeys = getApiKeys()
+      const anthropicKey = apiKeys.anthropic || undefined
+      const openaiKey = apiKeys.openai || undefined
+
+      const res = await fetch('/api/generate-prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          store,
+          ...(anthropicKey ? { apiKey: anthropicKey } : {}),
+          ...(openaiKey ? { openaiApiKey: openaiKey } : {}),
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setAutoGenerateError(data.error)
+        return
+      }
+      const generated: Prompt[] = data.prompts || []
+      const now = new Date().toISOString()
+      for (const p of generated) {
+        await savePromptToDB({ ...p, updatedAt: now }, companyId)
+      }
+      const updated = await getPromptsFromDB(companyId)
+      setPrompts(updated)
+
+      const winningCount = generated.filter((p) => p.isWinning).length
+      if (data.autoMeasured) {
+        const stats = data.stats || {}
+        const positiveCount = stats.positiveCount ?? generated.filter((p: Prompt) => p.sentiment === 'positive').length
+        const neutralCount = stats.neutralCount ?? generated.filter((p: Prompt) => p.sentiment === 'neutral').length
+        setAutoGenerateMessage(
+          `${generated.length}件のプロンプトを生成しました。ChatGPTで自動計測し、${winningCount}件を勝ち筋に設定しました（positive: ${positiveCount}件、neutral: ${neutralCount}件）。`
+        )
+      } else {
+        setAutoGenerateMessage(`${generated.length}件のプロンプトを生成しました。`)
+      }
+    } catch {
+      setAutoGenerateError('プロンプト生成に失敗しました。ネットワーク接続を確認してください。')
+    } finally {
+      setAutoGenerating(false)
+    }
+  }
 
   // ---- derived counts ----
   const totalCount = prompts.length
@@ -141,13 +206,20 @@ export default function PromptsPage() {
   const awarenessCount = prompts.filter((p) => p.category === 'awareness').length
   const reputationCount = prompts.filter((p) => p.category === 'reputation').length
 
+  // ---- topic list ----
+  const topics = Array.from(new Set(prompts.map((p) => p.topic).filter((t): t is string => Boolean(t))))
+
   // ---- filtered list ----
+  const isFiltered = search || filterCategory !== 'all' || filterTopic !== 'all'
+
   const filteredPrompts = prompts.filter((p) => {
     const matchSearch =
       !search || p.text.toLowerCase().includes(search.toLowerCase())
     const matchCategory =
       filterCategory === 'all' || p.category === filterCategory
-    return matchSearch && matchCategory
+    const matchTopic =
+      filterTopic === 'all' || p.topic === filterTopic
+    return matchSearch && matchCategory && matchTopic
   })
 
   // Sort: winning first, then by createdAt desc
@@ -171,6 +243,7 @@ export default function PromptsPage() {
       difficulty: prompt.difficulty,
       priority: prompt.priority,
       pseudoMemory: prompt.pseudoMemory,
+      topic: prompt.topic || '',
     })
     setEditingId(prompt.id)
     setFormError('')
@@ -187,12 +260,18 @@ export default function PromptsPage() {
     if (editingId) {
       const existing = prompts.find((p) => p.id === editingId)
       if (existing) {
-        await savePromptToDB({ ...existing, ...form, updatedAt: now }, companyId)
+        await savePromptToDB({
+          ...existing,
+          ...form,
+          topic: form.topic || undefined,
+          updatedAt: now,
+        }, companyId)
       }
     } else {
       await savePromptToDB({
         id: generateId(),
         ...form,
+        topic: form.topic || undefined,
         isWinning: false,
         displayRate: undefined,
         citedSources: [],
@@ -236,11 +315,40 @@ export default function PromptsPage() {
               計測対象プロンプトの追加・編集・削除。★で勝ち筋プロンプトを設定できます。
             </p>
           </div>
-          <Button onClick={openCreateDialog} className="shrink-0">
-            <Plus className="h-4 w-4 mr-2" />
-            プロンプト追加
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              onClick={handleAutoGenerate}
+              disabled={autoGenerating}
+            >
+              {autoGenerating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4 mr-2" />
+              )}
+              {autoGenerating
+                ? 'プロンプト生成中（ChatGPTで表示率を計測中...）'
+                : 'AIでプロンプトを生成'}
+            </Button>
+            <Button onClick={openCreateDialog}>
+              <Plus className="h-4 w-4 mr-2" />
+              プロンプト追加
+            </Button>
+          </div>
         </div>
+
+        {/* ---- Auto Generate Messages ---- */}
+        {autoGenerateMessage && (
+          <Alert className="border-green-300 bg-green-50 text-green-800">
+            <Sparkles className="h-4 w-4 text-green-600" />
+            <AlertDescription>{autoGenerateMessage}</AlertDescription>
+          </Alert>
+        )}
+        {autoGenerateError && (
+          <Alert variant="destructive">
+            <AlertDescription>{autoGenerateError}</AlertDescription>
+          </Alert>
+        )}
 
         {/* ---- Stats Row ---- */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -271,50 +379,88 @@ export default function PromptsPage() {
         </div>
 
         {/* ---- Filters ---- */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          {/* Search */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <Input
-              placeholder="プロンプトテキストを検索..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                placeholder="プロンプトテキストを検索..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* Category Tabs */}
+            <Tabs
+              value={filterCategory}
+              onValueChange={(v) => setFilterCategory(v as FilterCategory)}
+            >
+              <TabsList className="h-9">
+                <TabsTrigger value="all" className="text-xs px-3">
+                  全て
+                  <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-xs tabular-nums leading-none">
+                    {totalCount}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="sales" className="text-xs px-3">
+                  売上
+                  <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-xs tabular-nums leading-none">
+                    {salesCount}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="awareness" className="text-xs px-3">
+                  ブランド認知
+                  <span className="ml-1.5 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-xs tabular-nums leading-none">
+                    {awarenessCount}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="reputation" className="text-xs px-3">
+                  ブランド毀損
+                  <span className="ml-1.5 rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-xs tabular-nums leading-none">
+                    {reputationCount}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
 
-          {/* Category Tabs */}
-          <Tabs
-            value={filterCategory}
-            onValueChange={(v) => setFilterCategory(v as FilterCategory)}
-          >
-            <TabsList className="h-9">
-              <TabsTrigger value="all" className="text-xs px-3">
-                全て
-                <span className="ml-1.5 rounded-full bg-muted-foreground/15 px-1.5 py-0.5 text-xs tabular-nums leading-none">
-                  {totalCount}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="sales" className="text-xs px-3">
-                売上
-                <span className="ml-1.5 rounded-full bg-green-100 text-green-700 px-1.5 py-0.5 text-xs tabular-nums leading-none">
-                  {salesCount}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="awareness" className="text-xs px-3">
-                ブランド認知
-                <span className="ml-1.5 rounded-full bg-blue-100 text-blue-700 px-1.5 py-0.5 text-xs tabular-nums leading-none">
-                  {awarenessCount}
-                </span>
-              </TabsTrigger>
-              <TabsTrigger value="reputation" className="text-xs px-3">
-                ブランド毀損
-                <span className="ml-1.5 rounded-full bg-red-100 text-red-700 px-1.5 py-0.5 text-xs tabular-nums leading-none">
-                  {reputationCount}
-                </span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          {/* Topic Filter */}
+          {topics.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground font-medium">トピック:</span>
+              <button
+                onClick={() => setFilterTopic('all')}
+                className={cn(
+                  'text-xs px-2.5 py-1 rounded-full border transition-colors',
+                  filterTopic === 'all'
+                    ? 'bg-foreground text-background border-foreground'
+                    : 'bg-background text-muted-foreground border-border hover:border-foreground/50'
+                )}
+              >
+                すべて
+              </button>
+              {topics.map((topic) => {
+                const count = prompts.filter((p) => p.topic === topic).length
+                return (
+                  <button
+                    key={topic}
+                    onClick={() => setFilterTopic(filterTopic === topic ? 'all' : topic)}
+                    className={cn(
+                      'text-xs px-2.5 py-1 rounded-full border transition-colors',
+                      filterTopic === topic
+                        ? 'bg-violet-600 text-white border-violet-600'
+                        : 'bg-violet-50 text-violet-700 border-violet-200 hover:border-violet-400'
+                    )}
+                  >
+                    {topic}
+                    <span className="ml-1 opacity-70">{count}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* ---- Prompt List ---- */}
@@ -322,7 +468,7 @@ export default function PromptsPage() {
           <Card className="border-dashed">
             <CardContent className="py-16 text-center space-y-3">
               <MessageSquare className="h-10 w-10 mx-auto text-muted-foreground opacity-30" />
-              {search || filterCategory !== 'all' ? (
+              {isFiltered ? (
                 <>
                   <p className="font-medium text-sm text-muted-foreground">
                     条件に一致するプロンプトが見つかりません
@@ -333,6 +479,7 @@ export default function PromptsPage() {
                     onClick={() => {
                       setSearch('')
                       setFilterCategory('all')
+                      setFilterTopic('all')
                     }}
                   >
                     <Filter className="h-3.5 w-3.5 mr-1.5" />
@@ -461,6 +608,17 @@ export default function PromptsPage() {
                           </Badge>
                         )}
 
+                        {/* Topic badge */}
+                        {prompt.topic && (
+                          <Badge
+                            variant="outline"
+                            className="text-xs border-violet-200 text-violet-700 bg-violet-50 cursor-pointer"
+                            onClick={() => setFilterTopic(filterTopic === prompt.topic ? 'all' : (prompt.topic || 'all'))}
+                          >
+                            {prompt.topic}
+                          </Badge>
+                        )}
+
                         {/* Pseudo memory tooltip */}
                         {prompt.pseudoMemory && (
                           <Tooltip>
@@ -522,7 +680,7 @@ export default function PromptsPage() {
 
             <p className="text-xs text-muted-foreground text-right pt-1 pr-1">
               {sortedPrompts.length}件表示
-              {filterCategory !== 'all' || search ? ` / 全${totalCount}件中` : ''}
+              {isFiltered ? ` / 全${totalCount}件中` : ''}
             </p>
           </div>
         )}
@@ -670,6 +828,23 @@ export default function PromptsPage() {
                 onChange={(e) => setForm({ ...form, pseudoMemory: e.target.value })}
                 rows={2}
               />
+            </div>
+
+            {/* Topic */}
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="topic" className="text-sm font-medium">
+                  トピック
+                </Label>
+                <span className="text-xs text-muted-foreground ml-auto">任意</span>
+              </div>
+              <Input
+                id="topic"
+                placeholder="例：課題認識、サービス比較、コスト確認..."
+                value={form.topic}
+                onChange={(e) => setForm({ ...form, topic: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">購買フェーズに合わせてトピックを設定できます</p>
             </div>
           </div>
 

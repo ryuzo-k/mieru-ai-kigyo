@@ -199,6 +199,97 @@ async function measureWithPerplexity(
   }
 }
 
+// ── Google AI Overviews (via SerpApi) ─────────────────────────────────────
+
+async function measureWithGoogleAIOverviews(
+  prompt: string,
+  serpApiKey: string
+): Promise<{ response: string; citations?: string[]; triggered: boolean; error?: string }> {
+  if (!serpApiKey) return { response: '', triggered: false, error: 'SerpApi APIキー未設定' }
+  try {
+    const encodedPrompt = encodeURIComponent(prompt)
+    const res = await fetch(
+      `https://serpapi.com/search.json?engine=google&q=${encodedPrompt}&api_key=${serpApiKey}&hl=ja&gl=jp`,
+      { method: 'GET' }
+    )
+    if (!res.ok) return { response: '', triggered: false, error: `SerpApi エラー: ${res.status}` }
+    const data = await res.json()
+
+    const aiOverview = data.ai_overview
+    if (!aiOverview) return { response: '', triggered: false }
+
+    let textBlocks: { type: string; snippet?: string; list?: { title?: string; snippet?: string }[] }[] = []
+    let refsRaw: { title?: string; link?: string; source?: string; snippet?: string }[] = []
+
+    if (aiOverview.text_blocks) {
+      textBlocks = aiOverview.text_blocks
+      refsRaw = aiOverview.references || []
+    } else if (aiOverview.page_token) {
+      const res2 = await fetch(
+        `https://serpapi.com/search.json?engine=google_ai_overview&page_token=${encodeURIComponent(aiOverview.page_token)}&api_key=${serpApiKey}`,
+        { method: 'GET' }
+      )
+      if (res2.ok) {
+        const data2 = await res2.json()
+        textBlocks = data2.ai_overview?.text_blocks || []
+        refsRaw = data2.ai_overview?.references || []
+      }
+    }
+
+    const parts: string[] = []
+    for (const block of textBlocks) {
+      if (block.type === 'paragraph' && block.snippet) {
+        parts.push(block.snippet)
+      } else if (block.type === 'list' && block.list) {
+        for (const item of block.list) {
+          const line = [item.title, item.snippet].filter(Boolean).join(': ')
+          if (line) parts.push(`• ${line}`)
+        }
+      }
+    }
+    const response = parts.join('\n\n')
+    const citations = refsRaw.map((r) => r.link || r.source || '').filter(Boolean)
+
+    return { response, citations, triggered: true }
+  } catch {
+    return { response: '', triggered: false, error: 'APIリクエストに失敗しました' }
+  }
+}
+
+// ── Google AI Mode (via SerpApi) ──────────────────────────────────────────
+
+async function measureWithGoogleAIMode(
+  prompt: string,
+  serpApiKey: string
+): Promise<{ response: string; citations?: string[]; triggered: boolean; error?: string }> {
+  if (!serpApiKey) return { response: '', triggered: false, error: 'SerpApi APIキー未設定' }
+  try {
+    const encodedPrompt = encodeURIComponent(prompt)
+    const res = await fetch(
+      `https://serpapi.com/search.json?engine=google_ai_mode&q=${encodedPrompt}&api_key=${serpApiKey}&hl=ja&gl=jp`,
+      { method: 'GET' }
+    )
+    if (!res.ok) return { response: '', triggered: false, error: `SerpApi エラー: ${res.status}` }
+    const data = await res.json()
+
+    const aiModeResults: { response_text?: string; sources?: { title?: string; url?: string }[] }[] =
+      data.ai_mode_results || []
+
+    if (aiModeResults.length === 0) return { response: '', triggered: false }
+
+    const parts = aiModeResults.map((r) => r.response_text || '').filter(Boolean)
+    const response = parts.join('\n\n')
+    const citations = aiModeResults
+      .flatMap((r) => r.sources || [])
+      .map((s) => s.url || '')
+      .filter(Boolean)
+
+    return { response, citations, triggered: true }
+  } catch {
+    return { response: '', triggered: false, error: 'APIリクエストに失敗しました' }
+  }
+}
+
 // ── AI-powered direct competitor filtering ────────────────────────────────
 
 async function filterDirectCompetitors(
@@ -273,6 +364,8 @@ async function analyzeSentiment(
   citedContext: string
   citedCompetitors: string[]
   competitorRankings?: { name: string; rank: number; snippet: string }[]
+  mentionRank?: number | null
+  fanoutQueries?: string[]
 }> {
   const lowerResponse = response.toLowerCase()
   const lowerName = storeName.toLowerCase()
@@ -296,6 +389,8 @@ async function analyzeSentiment(
       citedUrls,
       citedContext: '',
       citedCompetitors: rawCitedCompetitors,
+      mentionRank: null,
+      fanoutQueries: [],
     }
   }
 
@@ -326,10 +421,14 @@ Return ONLY raw JSON (no markdown, no code blocks):
   "positiveElements": "positive things said about target company (empty if none)",
   "negativeElements": "negative things said about target company (empty if none)",
   "citedContext": "context in which target company was mentioned (empty if not mentioned)",
+  "mentionRank": null or integer (1-based position in a recommendation list like ①②③ or 1.2.3. or bullet points; null if not in a list or not mentioned),
+  "fanoutQueries": ["follow-up query 1", "follow-up query 2"] (extract related/follow-up questions generated at the end of the response; empty array if none),
   "competitorRankings": [{"name": "CompanyName", "rank": 1, "snippet": "exact quote showing the mention"}],
   "citedSources": ["domain1.com", "domain2.com"]
 }
 Notes:
+- mentionRank: if the target company appears in a numbered/bulleted recommendation list (①②③, 1. 2. 3., ・etc.), return its 1-based position. Return null if mentioned outside a list or not mentioned at all.
+- fanoutQueries: look for sections like "関連する質問", "他にも聞けること", "詳しく調べる", "関連質問" at the end of the response and extract those queries as an array.
 - competitorRankings: rank by order of appearance in the response (1=first). Only include competitors that appear in the response.
 - citedSources: list domains/URLs that the AI response references or cites.`,
           },
@@ -346,6 +445,8 @@ Notes:
         citedUrls,
         citedContext: '',
         citedCompetitors: rawCitedCompetitors,
+        mentionRank: null,
+        fanoutQueries: [],
       }
     }
 
@@ -398,6 +499,13 @@ Notes:
       directSet.has(c.name.toLowerCase())
     )
 
+    const mentionRank = parsed.mentionRank !== undefined
+      ? (typeof parsed.mentionRank === 'number' ? parsed.mentionRank : null)
+      : null
+    const fanoutQueries: string[] = Array.isArray(parsed.fanoutQueries)
+      ? (parsed.fanoutQueries as unknown[]).filter((q): q is string => typeof q === 'string')
+      : []
+
     return {
       sentiment: ((parsed.sentiment as Sentiment) || 'neutral'),
       positiveElements: (parsed.positiveElements as string) || '',
@@ -407,6 +515,8 @@ Notes:
       citedContext: (parsed.citedContext as string) || '',
       citedCompetitors: filteredRankings.map((c) => c.name),
       competitorRankings: filteredRankings,
+      mentionRank,
+      fanoutQueries,
     }
   } catch {
     return {
@@ -417,6 +527,8 @@ Notes:
       citedUrls,
       citedContext: '',
       citedCompetitors: rawCitedCompetitors,
+      mentionRank: null,
+      fanoutQueries: [],
     }
   }
 }
@@ -449,6 +561,7 @@ export async function POST(request: NextRequest) {
     const openaiKey = clientApiKeys?.chatgpt || process.env.OPENAI_API_KEY || ''
     const geminiKey = clientApiKeys?.gemini || process.env.GOOGLE_GEMINI_API_KEY || ''
     const perplexityKey = clientApiKeys?.perplexity || process.env.PERPLEXITY_API_KEY || ''
+    const serpApiKey = clientApiKeys?.serpapi || process.env.SERPAPI_API_KEY || ''
 
     // Fetch store info for AI competitor filtering
     let businessType = ''
@@ -482,9 +595,11 @@ export async function POST(request: NextRequest) {
           ? geminiKey
           : platform === 'perplexity'
           ? perplexityKey
+          : platform === 'google_ai_overviews' || platform === 'google_ai_mode'
+          ? serpApiKey
           : ''
 
-      if (!platformKey) {
+      if (!platformKey && platform !== 'google_ai_overviews' && platform !== 'google_ai_mode') {
         results.push({
           id: generateId(),
           promptId,
@@ -501,6 +616,82 @@ export async function POST(request: NextRequest) {
           competitorMentions: {},
           rawResponses: [],
           displayRate: 0,
+          measuredAt: now,
+        })
+        continue
+      }
+
+      // Google AI系は1回のみ計測
+      if (platform === 'google_ai_overviews' || platform === 'google_ai_mode') {
+        const googleData = platform === 'google_ai_overviews'
+          ? await measureWithGoogleAIOverviews(promptText, serpApiKey)
+          : await measureWithGoogleAIMode(promptText, serpApiKey)
+
+        if (!googleData.triggered) {
+          results.push({
+            id: generateId(),
+            promptId,
+            platform,
+            response: googleData.error || '',
+            mentioned: false,
+            mentionPosition: null,
+            sentiment: 'neutral',
+            positiveElements: '',
+            negativeElements: '',
+            citedUrls: [],
+            citedContext: '',
+            citedCompetitors: [],
+            competitorMentions: {},
+            rawResponses: [],
+            displayRate: 0,
+            triggered: false,
+            measuredAt: now,
+          })
+          continue
+        }
+
+        const mentionBrand = (brandName || '').toLowerCase()
+        const mentioned =
+          googleData.response.toLowerCase().includes(storeName.toLowerCase()) ||
+          (!!mentionBrand && googleData.response.toLowerCase().includes(mentionBrand))
+
+        const analysis = await analyzeSentiment(
+          googleData.response, storeName, competitors, anthropicKey, googleData.citations || [], businessType, services
+        )
+        const competitorMentions: Record<string, boolean> = {}
+        for (const competitor of competitors) {
+          competitorMentions[competitor] = googleData.response.toLowerCase().includes(competitor.toLowerCase())
+        }
+        const citedSourcesWithFavicons = analysis.citedUrls.map(url => {
+          try {
+            const domain = new URL(url).hostname
+            return { url, domain, title: undefined }
+          } catch {
+            return { url, domain: url, title: undefined }
+          }
+        })
+
+        results.push({
+          id: generateId(),
+          promptId,
+          platform,
+          response: googleData.response,
+          mentioned,
+          mentionPosition: analysis.mentionPosition,
+          sentiment: analysis.sentiment,
+          positiveElements: analysis.positiveElements,
+          negativeElements: analysis.negativeElements,
+          citedUrls: analysis.citedUrls,
+          citedContext: analysis.citedContext,
+          citedCompetitors: analysis.citedCompetitors,
+          competitorMentions,
+          competitorRankings: analysis.competitorRankings,
+          rawResponses: [googleData.response],
+          displayRate: mentioned ? 100 : 0,
+          mentionRank: analysis.mentionRank,
+          fanoutQueries: analysis.fanoutQueries,
+          citedSourcesWithFavicons,
+          triggered: true,
           measuredAt: now,
         })
         continue
@@ -586,6 +777,15 @@ export async function POST(request: NextRequest) {
           .includes(competitor.toLowerCase())
       }
 
+      const citedSourcesWithFavicons = analysis.citedUrls.map(url => {
+        try {
+          const domain = new URL(url).hostname
+          return { url, domain, title: undefined }
+        } catch {
+          return { url, domain: url, title: undefined }
+        }
+      })
+
       results.push({
         id: generateId(),
         promptId,
@@ -603,6 +803,10 @@ export async function POST(request: NextRequest) {
         competitorRankings: analysis.competitorRankings,
         rawResponses,
         displayRate,
+        mentionRank: analysis.mentionRank,
+        fanoutQueries: analysis.fanoutQueries,
+        citedSourcesWithFavicons,
+        triggered: true,
         measuredAt: now,
       })
     }
