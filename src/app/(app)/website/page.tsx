@@ -22,7 +22,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { getApiKeys, getWordPressConfig } from '@/lib/storage'
+import { getWordPressConfig } from '@/lib/storage'
 import { WebsiteIssue } from '@/types'
 
 // Monaco Editorは動的インポート（SSR無効）
@@ -168,7 +168,6 @@ export default function WebsitePage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   const wpConfig = getWordPressConfig()
-  const apiKeys = getApiKeys()
 
   // Scroll chat to bottom on new message
   useEffect(() => {
@@ -242,10 +241,6 @@ export default function WebsitePage() {
 
   const handleSendMessage = async () => {
     if (!userInput.trim() || aiLoading) return
-    if (!apiKeys.anthropic) {
-      alert('Anthropic APIキーが必要です（設定から入力してください）')
-      return
-    }
 
     const newMessages: ChatMessage[] = [
       ...messages,
@@ -279,7 +274,6 @@ ${htmlCode}
 - コンテンツの明確化・FAQ追加
 - 見出し構造の改善
 - E-E-A-T要素の強化`,
-          apiKey: apiKeys.anthropic,
         }),
       })
       if (!res.ok) throw new Error('AIの応答取得に失敗しました')

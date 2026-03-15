@@ -23,7 +23,6 @@ import {
   saveProjectTaskToDB,
   updateProjectTaskInDB,
   deleteProjectTaskFromDB,
-  getApiKeysFromDB,
 } from '@/lib/db'
 import type { ProjectTask } from '@/lib/db'
 
@@ -505,7 +504,6 @@ function SchedulePageInner() {
     setGenerateError('')
     setGenerating(true)
     try {
-      const apiKeys = await getApiKeysFromDB(companyId || undefined)
       const res = await fetch('/api/generate-project-schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -515,7 +513,6 @@ function SchedulePageInner() {
           contractDurationMonths: contractDuration,
           servicePackage,
           clientName: clientName.trim(),
-          clientApiKey: apiKeys.anthropic || undefined,
         }),
       })
       const data = await res.json()

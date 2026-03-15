@@ -25,8 +25,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  getApiKeys,
-  saveApiKeys,
   getMeasurementSchedule,
   saveMeasurementSchedule,
   resetStore,
@@ -35,56 +33,10 @@ import {
 } from '@/lib/storage'
 import { getStoreFromDB, saveStoreToDB, getGoogleTokenFromDB } from '@/lib/db'
 import { useCompany } from '@/context/company-context'
-import { ApiKeys, StoreInfo, BusinessType, WordPressConfig } from '@/types'
+import { StoreInfo, BusinessType, WordPressConfig } from '@/types'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-
-interface ApiKeyField {
-  key: keyof ApiKeys
-  label: string
-  placeholder: string
-  description: string
-}
-
-const apiKeyFields: ApiKeyField[] = [
-  {
-    key: 'anthropic',
-    label: 'Anthropic API Key（Claude）',
-    placeholder: 'sk-ant-...',
-    description: 'プロンプト生成・計測・分析チャットに使用します',
-  },
-  {
-    key: 'openai',
-    label: 'OpenAI API Key（ChatGPT）',
-    placeholder: 'sk-...',
-    description: 'ChatGPTでの計測に使用します',
-  },
-  {
-    key: 'gemini',
-    label: 'Google Gemini API Key',
-    placeholder: 'AIza...',
-    description: 'Geminiでの計測に使用します',
-  },
-  {
-    key: 'perplexity',
-    label: 'Perplexity API Key',
-    placeholder: 'pplx-...',
-    description: 'Perplexityでの計測に使用します',
-  },
-  {
-    key: 'firecrawl',
-    label: 'Firecrawl API Key',
-    placeholder: 'fc-...',
-    description: 'ウェブサイトのスクレイピングに使用します',
-  },
-  {
-    key: 'serpapi',
-    label: 'SerpApi API Key',
-    placeholder: '8f817d...',
-    description: 'Google AI Overviews と Google AI Mode の計測に使用（serpapi.com）',
-  },
-]
 
 const businessTypeLabels: Record<BusinessType, string> = {
   food: '小売・EC',
@@ -97,16 +49,6 @@ const businessTypeLabels: Record<BusinessType, string> = {
 export default function SettingsPage() {
   const router = useRouter()
   const { companyId } = useCompany()
-  const [apiKeys, setApiKeys] = useState<ApiKeys>({
-    anthropic: '',
-    openai: '',
-    gemini: '',
-    perplexity: '',
-    firecrawl: '',
-    serpapi: '',
-  })
-  const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
-  const [savedKeys, setSavedKeys] = useState<Record<string, boolean>>({})
   const [store, setStore] = useState<StoreInfo | null>(null)
   const [editStore, setEditStore] = useState<Partial<StoreInfo>>({})
   const [schedule, setSchedule] = useState<{ preset: 'three_times' | 'custom'; customTimes: string[] }>({ preset: 'three_times', customTimes: ['09:00', '13:00', '18:00'] })
@@ -125,7 +67,6 @@ export default function SettingsPage() {
   const [googleMsg, setGoogleMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
-    setApiKeys(getApiKeys())
     setSchedule(getMeasurementSchedule())
     setWpConfig(getWordPressConfig())
     getStoreFromDB(companyId).then((s) => {
@@ -155,20 +96,6 @@ export default function SettingsPage() {
       }
     }
   }, [companyId])
-
-  const handleSaveApiKey = (key: keyof ApiKeys) => {
-    saveApiKeys({ [key]: apiKeys[key] })
-    setSavedKeys((prev) => ({ ...prev, [key]: true }))
-    setTimeout(() => setSavedKeys((prev) => ({ ...prev, [key]: false })), 2000)
-  }
-
-  const handleSaveAllKeys = () => {
-    saveApiKeys(apiKeys)
-    const allSaved: Record<string, boolean> = {}
-    apiKeyFields.forEach((f) => (allSaved[f.key] = true))
-    setSavedKeys(allSaved)
-    setTimeout(() => setSavedKeys({}), 2000)
-  }
 
   const handleSaveStore = async () => {
     if (!store) return
@@ -254,65 +181,14 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>APIキー設定</CardTitle>
           <CardDescription>
-            各サービスのAPIキーを入力してください。キーはブラウザのlocalStorageに保存されます。
+            APIキーはVercelの環境変数で管理されています。
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-5">
-          {apiKeyFields.map((field) => (
-            <div key={field.key} className="space-y-2">
-              <Label htmlFor={field.key}>{field.label}</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    id={field.key}
-                    type={showKeys[field.key] ? 'text' : 'password'}
-                    placeholder={field.placeholder}
-                    value={apiKeys[field.key]}
-                    onChange={(e) =>
-                      setApiKeys((prev) => ({
-                        ...prev,
-                        [field.key]: e.target.value,
-                      }))
-                    }
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
-                    onClick={() =>
-                      setShowKeys((prev) => ({
-                        ...prev,
-                        [field.key]: !prev[field.key],
-                      }))
-                    }
-                  >
-                    {showKeys[field.key] ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleSaveApiKey(field.key)}
-                  className="shrink-0"
-                >
-                  {savedKeys[field.key] ? (
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">{field.description}</p>
-            </div>
-          ))}
-          <Button onClick={handleSaveAllKeys} className="w-full">
-            <Save className="h-4 w-4 mr-2" />
-            すべてのAPIキーを保存
-          </Button>
+        <CardContent>
+          <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground space-y-1">
+            <p>Anthropic、OpenAI、Gemini、Perplexity、SerpApiのAPIキーはVercelの環境変数で設定されています。</p>
+            <p>変更が必要な場合はVercelダッシュボードをご確認ください。</p>
+          </div>
         </CardContent>
       </Card>
 

@@ -59,7 +59,6 @@ import { Separator } from '@/components/ui/separator'
 import { Prompt, PromptCategory, PromptDifficulty, PromptPriority } from '@/types'
 import {
   generateId,
-  getApiKeys,
 } from '@/lib/storage'
 import { getPromptsFromDB, savePromptToDB, deletePromptFromDB, getStoreFromDB } from '@/lib/db'
 import { useCompany } from '@/context/company-context'
@@ -155,18 +154,10 @@ export default function PromptsPage() {
         setAutoGenerateError('企業情報が見つかりません。先に企業情報を設定してください。')
         return
       }
-      const apiKeys = getApiKeys()
-      const anthropicKey = apiKeys.anthropic || undefined
-      const openaiKey = apiKeys.openai || undefined
-
       const res = await fetch('/api/generate-prompts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          store,
-          ...(anthropicKey ? { apiKey: anthropicKey } : {}),
-          ...(openaiKey ? { openaiApiKey: openaiKey } : {}),
-        }),
+        body: JSON.stringify({ store }),
       })
       const data = await res.json()
       if (data.error) {

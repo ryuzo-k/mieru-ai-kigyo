@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { cn, formatDate } from '@/lib/utils'
-import { getApiKeys, generateId } from '@/lib/storage'
+import { generateId } from '@/lib/storage'
 import {
   getStoreFromDB, getPromptsFromDB,
   getContentSuggestionsFromDB, saveContentSuggestionsToDB,
@@ -81,7 +81,6 @@ function CompetitorAnalysisTab() {
   }, [companyId])
 
   const handleAnalyze = async () => {
-    const apiKeys = getApiKeys()
     if (!store) return
     const competitors = store.competitors || []
     if (competitors.length === 0) {
@@ -95,9 +94,8 @@ function CompetitorAnalysisTab() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           storeName: store.name,
-              brandName: store.brandName || '',
+          brandName: store.brandName || '',
           competitors: competitors.map((c) => ({ name: c.name, url: c.url })),
-          clientApiKey: apiKeys.anthropic,
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -381,7 +379,6 @@ export default function ContentPage() {
   const [prompts, setPrompts] = useState<Prompt[]>([])
   const [contents, setContents] = useState<GeneratedContent[]>([])
   const [allResults, setAllResults] = useState<MeasurementResult[]>([])
-  const [apiKey, setApiKey] = useState('')
 
   // Suggestion state
   const [suggesting, setSuggesting] = useState(false)
@@ -401,7 +398,6 @@ export default function ContentPage() {
     getContentSuggestionsFromDB(companyId).then(setSuggestions).catch(() => {})
     getGeneratedContentsFromDB(companyId).then(setContents).catch(() => {})
     getMeasurementResultsFromDB(undefined, companyId).then(setAllResults).catch(() => {})
-    setApiKey(getApiKeys().anthropic || '')
   }, [companyId])
 
   const winningPrompts = prompts.filter((p) => p.isWinning)
@@ -422,7 +418,6 @@ export default function ContentPage() {
           store,
           prompts: targetPrompts,
           measurementResults: allResults,
-          clientApiKey: apiKey,
         }),
       })
       if (!res.ok) throw new Error(await res.text())
@@ -456,7 +451,6 @@ export default function ContentPage() {
           requirements: s.keyRequirements,
           suggestedTitle: s.title,
           angle: s.angle,
-          clientApiKey: apiKey,
         }),
       })
       if (!res.ok) throw new Error(await res.text())

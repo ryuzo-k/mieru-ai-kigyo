@@ -38,9 +38,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  getApiKeys,
-} from '@/lib/storage'
 import { getStoreFromDB, getPromptsFromDB, getMeasurementResultsFromDB } from '@/lib/db'
 import { useCompany } from '@/context/company-context'
 import {
@@ -216,16 +213,13 @@ export default function AnalyticsPage() {
 
   // ── Derived data ───────────────────────────────────────────────────────────
 
-  const apiKeys = getApiKeys()
-
-  // APIキーがない場合はサーバー環境変数で動くためtrueにする
   const platformAvailability: Record<Platform, boolean> = {
-    claude: true,  // サーバー側で ANTHROPIC_API_KEY を使用
-    gemini: true,  // サーバー側で GOOGLE_GEMINI_API_KEY を使用
-    chatgpt: true, // サーバー側で OPENAI_API_KEY を使用
-    perplexity: true, // サーバー側で PERPLEXITY_API_KEY を使用
-    google_ai_overviews: !!apiKeys.serpapi,
-    google_ai_mode: !!apiKeys.serpapi,
+    claude: true,
+    gemini: true,
+    chatgpt: true,
+    perplexity: true,
+    google_ai_overviews: true,
+    google_ai_mode: true,
   }
 
   // All prompts (sorted: winning first, then by display rate desc)
@@ -306,7 +300,6 @@ export default function AnalyticsPage() {
           storeName: store.name,
           brandName: store.brandName || '',
           competitors: store.competitors.map((c) => c.name),
-          apiKeys: { serpapi: apiKeys.serpapi || '' },
         }),
       })
       const { jobId, total } = await res.json()
@@ -374,7 +367,7 @@ export default function AnalyticsPage() {
   }
 
   const handleChat = async () => {
-    if (!chatInput.trim() || !apiKeys.anthropic) return
+    if (!chatInput.trim()) return
 
     const userMessage = { role: 'user' as const, content: chatInput.trim() }
     const updatedMessages = [...chatMessages, userMessage]
@@ -411,7 +404,6 @@ ${allStats
         body: JSON.stringify({
           messages: updatedMessages,
           systemContext,
-          apiKey: apiKeys.anthropic,
         }),
       })
       const data = await res.json()
@@ -1022,16 +1014,6 @@ ${allStats
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!apiKeys.anthropic && (
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>APIキーが必要です</AlertTitle>
-                  <AlertDescription>
-                    チャット機能にはAnthropic APIキーが必要です。設定ページから入力してください。
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {/* Message area */}
               <ScrollArea className="h-[380px] rounded-lg border bg-muted/20 p-4">
                 <div className="space-y-3">
@@ -1099,11 +1081,7 @@ ${allStats
               {/* Input row */}
               <div className="flex gap-2">
                 <Input
-                  placeholder={
-                    apiKeys.anthropic
-                      ? 'メッセージを入力… (Enterで送信)'
-                      : 'APIキーを設定してください'
-                  }
+                  placeholder="メッセージを入力… (Enterで送信)"
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
@@ -1112,13 +1090,13 @@ ${allStats
                       handleChat()
                     }
                   }}
-                  disabled={chatLoading || !apiKeys.anthropic}
+                  disabled={chatLoading}
                   className="flex-1"
                 />
                 <Button
                   size="icon"
                   onClick={handleChat}
-                  disabled={chatLoading || !chatInput.trim() || !apiKeys.anthropic}
+                  disabled={chatLoading || !chatInput.trim()}
                 >
                   {chatLoading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
